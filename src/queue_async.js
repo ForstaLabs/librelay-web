@@ -4,7 +4,6 @@
     'use strict';
 
     const ns = self.relay = self.relay || {};
-    ns.protobuf = {};
 
     const _queueAsyncBuckets = new Map();
 

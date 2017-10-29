@@ -6,11 +6,11 @@
     const ns = self.relay = self.relay || {};
 
     let _initialized;
-    ns.init = async function(store) {
+    ns.init = async function(store, protoPath, protoQuery) {
         if (_initialized) {
             return;
         }
-        await ns.protobuf.load();
+        await ns.protobuf.load(protoPath, protoQuery);
         ns.store = store;
         _initialized = true;
     };
