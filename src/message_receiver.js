@@ -17,7 +17,7 @@
             if (!noWebSocket) {
                 const url = this.tss.getMessageWebSocketURL();
                 this.wsr = new ns.WebSocketResource(url, {
-                    handleRequest: request => F.queueAsync(this, this.handleRequest.bind(this, request)),
+                    handleRequest: request => ns.queueAsync(this, this.handleRequest.bind(this, request)),
                     keepalive: {
                         path: '/v1/keepalive',
                         disconnect: true

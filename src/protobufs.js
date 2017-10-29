@@ -7,15 +7,16 @@
     const ns = self.relay = self.relay || {};
     ns.protobuf = {};
 
-    const path = '/@static/protos/';
+    //const path = '/@static/protos/';
     const manifest = [
         'IncomingPushMessageSignal.proto',
         'SubProtocol.proto',
         'DeviceMessages.proto'
     ];
 
-    async function loadProtoBufs(filename) {
-        const resp = await fetch(path + filename + `?v=${F.env.GIT_COMMIT.substring(0, 8)}`);
+    async function loadProtoBufs(path, filename, query) {
+        //const resp = await fetch(path + filename + `?v=${F.env.GIT_COMMIT.substring(0, 8)}`);
+        const resp = await fetch(path + filename + (query || ''));
         const data = await resp.text();
         if (!resp.ok) {
             throw new Error(data);
@@ -27,7 +28,7 @@
         }
     }
 
-    ns.protobuf.load = async function() {
+    ns.protobuf.load = async function(path, query) {
         await Promise.all(manifest.map(loadProtoBufs));
     };
 })();

@@ -3,7 +3,8 @@
 (function () {
     'use strict';
 
-    self.F = self.F || {};
+    const ns = self.relay = self.relay || {};
+    ns.protobuf = {};
 
     const _queueAsyncBuckets = new Map();
 
@@ -35,7 +36,7 @@
         cleanup();
     }
 
-    F.queueAsync = function(bucket, awaitable) {
+    ns.queueAsync = function(bucket, awaitable) {
         /* Run the async awaitable only when all other async calls registered
          * here have completed (or thrown).  The bucket argument is a hashable
          * key representing the task queue to use. */
