@@ -113,26 +113,12 @@
             const msg = new Message(attrs);
             await this.uploadAttachments(msg);
             const msgProto = msg.toProto();
-            try {
-                if (includeSelf) {
-                    const expirationStart = attrs.expiration && Date.now();
-                    await this._sendSync(msgProto, attrs.timestamp, attrs.threadId,
-                                              expirationStart);
-                }
-                return this._send(msgProto, attrs.timestamp, this.scrubSelf(attrs.addrs));
-            } finally {
-                if (F.env.SUPERMAN_NUMBER) {
-                    this._sendSupermanEcho(msg);
-                }
+            if (includeSelf) {
+                const expirationStart = attrs.expiration && Date.now();
+                await this._sendSync(msgProto, attrs.timestamp, attrs.threadId,
+                                          expirationStart);
             }
-        }
-
-        async _sendSupermanEcho(msg) {
-            const clone = _.pick(msg, 'body', 'attachments', 'timestamp');
-            clone.addrs = [F.env.SUPERMAN_NUMBER];
-            const m = new Message(clone);
-            m.attachmentPointers = msg.attachmentPointers;
-            this._send(m.toProto(), m.timestamp, clone.addrs);
+            return this._send(msgProto, attrs.timestamp, this.scrubSelf(attrs.addrs));
         }
 
         _send(msgproto, timestamp, addrs) {

@@ -29,8 +29,8 @@
             };
         }
 
-        async registerAccount() {
-            const name = this.makeDeviceName();
+        async registerAccount(name) {
+            console.assert(typeof name === 'string');
             const identity = await libsignal.KeyHelper.generateIdentityKeyPair();
             const devInfo = await this._generateDeviceInfo(identity, name);
             const accountInfo = await this.server.createAccount(devInfo);
@@ -41,7 +41,8 @@
             await this.registrationDone();
         }
 
-        registerDevice(setProvisioningUrl, confirmAddress, progressCallback) {
+        registerDevice(name, setProvisioningUrl, confirmAddress, progressCallback) {
+            console.assert(typeof name === 'string');
             const returnInterface = {waiting: true};
             const provisioningCipher = new ns.ProvisioningCipher();
             const pubKey = provisioningCipher.getPublicKey();
@@ -76,7 +77,6 @@
                 const provisionMessage = await provisioningCipher.decrypt(await webSocketWaiter);
                 returnInterface.waiting = false;
                 await confirmAddress(provisionMessage.addr);
-                const name = this.makeDeviceName();
                 const devInfo = await this._generateDeviceInfo(provisionMessage.identityKeyPair,
                                                                name);
                 await this.server.addDevice(provisionMessage.provisioningCode,
@@ -98,13 +98,14 @@
             return returnInterface;
         }
 
-        async linkDevice(uuid, pubKey) {
+        async linkDevice(uuid, pubKey, options) {
+            options = options || {};
             const code = await this.server.getLinkDeviceVerificationCode();
             const ourIdent = await ns.store.getOurIdentity();
             const pMessage = new ns.protobuf.ProvisionMessage();
             pMessage.identityKeyPrivate = ourIdent.privKey;
-            pMessage.addr = F.currentUser.id;
-            pMessage.userAgent = F.product;
+            pMessage.addr = await ns.store.getState('addr');
+            pMessage.userAgent = options.userAgent || 'librelay-web';
             pMessage.provisioningCode = code;
             const provisioningCipher = new ns.ProvisioningCipher();
             const pEnvelope = await provisioningCipher.encrypt(pubKey, pMessage);

@@ -111,7 +111,7 @@
                     options.headers.set('Authorization', authHeader(this.username, this.password));
                 }
             }
-            const body = options.json && ns.utils.jsonThing(options.json);
+            const body = options.json && ns.util.jsonThing(options.json);
             if (body) {
                 options.headers.set('Content-Type', 'application/json; charset=utf-8');
                 options.body = body;

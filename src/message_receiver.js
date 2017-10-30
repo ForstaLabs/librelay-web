@@ -97,7 +97,7 @@
                         await this.dispatchEvent(errorEvent);
                     }
                     console.info(`Will retry network in ${backoff} seconds (attempt ${attempt}).`);
-                    await F.util.sleep(backoff);
+                    await ns.util.sleep(backoff);
                 }
             }
             if (!this._closing) {
