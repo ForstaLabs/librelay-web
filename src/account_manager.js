@@ -1,5 +1,5 @@
 // vim: ts=4:sw=4:expandtab
-/* global libsignal getString platform */
+/* global libsignal */
 
 
 (function () {
@@ -19,7 +19,7 @@
         }
 
         _generateDeviceInfo(identityKeyPair, name) {
-            const passwd = btoa(getString(libsignal.crypto.getRandomBytes(16)));
+            const passwd = btoa(ns.util.getString(libsignal.crypto.getRandomBytes(16)));
             return {
                 name,
                 identityKeyPair,
@@ -54,7 +54,7 @@
                     handleRequest: request => {
                         if (request.path === "/v1/address" && request.verb === "PUT") {
                             const proto = ns.protobuf.ProvisioningUuid.decode(request.body);
-                            const uriPubKey = encodeURIComponent(btoa(getString(pubKey)));
+                            const uriPubKey = encodeURIComponent(btoa(ns.util.getString(pubKey)));
                             request.respond(200, 'OK');
                             const r = setProvisioningUrl(`tsdevice:/?uuid=${proto.uuid}&pub_key=${uriPubKey}`);
                             if (r instanceof Promise) {
@@ -224,16 +224,6 @@
 
         async deleteDevice(deviceId) {
             await this.server.deleteDevice(deviceId);
-        }
-
-        makeDeviceName() {
-            const machine = platform.product || platform.os.family;
-            const name = `${F.product} (${platform.name} on ${machine})`;
-            if (name.length >= 50) {
-                return name.substring(0, 45) + '...)';
-            } else {
-                return name;
-            }
         }
     };
 }());

@@ -1,5 +1,5 @@
 // vim: ts=4:sw=4:expandtab
-/* global getString, StringView */
+/* global */
 
 (function() {
     'use strict';
@@ -26,7 +26,7 @@
     }
 
     function authHeader(username, password) {
-        return "Basic " + btoa(getString(username) + ":" + getString(password));
+        return "Basic " + btoa(ns.util.getString(username) + ":" + ns.util.getString(password));
     }
 
     const URL_CALLS = {
@@ -121,14 +121,14 @@
 
         createAccount: async function(info) {
             const json = {
-                signalingKey: btoa(getString(info.signalingKey)),
+                signalingKey: btoa(ns.util.getString(info.signalingKey)),
                 supportsSms: false,
                 fetchesMessages: true,
                 registrationId: info.registrationId,
                 name: info.name,
                 password: info.password
             };
-            const response = await F.ccsm.fetchResource('/v1/provision/account', {
+            const response = await ns.ccsm.fetchResource('/v1/provision/account', {
                 method: 'PUT',
                 json,
             });
@@ -148,7 +148,7 @@
             }
             console.info("Adding device to:", addr);
             const jsonData = {
-                signalingKey: btoa(getString(info.signalingKey)),
+                signalingKey: btoa(ns.util.getString(info.signalingKey)),
                 supportsSms: false,
                 fetchesMessages: true,
                 registrationId: info.registrationId,
@@ -193,24 +193,24 @@
 
         registerKeys: function(genKeys) {
             var jsonData = {};
-            jsonData.identityKey = btoa(getString(genKeys.identityKey));
+            jsonData.identityKey = btoa(ns.util.getString(genKeys.identityKey));
             jsonData.signedPreKey = {
                 keyId: genKeys.signedPreKey.keyId,
-                publicKey: btoa(getString(genKeys.signedPreKey.publicKey)),
-                signature: btoa(getString(genKeys.signedPreKey.signature))
+                publicKey: btoa(ns.util.getString(genKeys.signedPreKey.publicKey)),
+                signature: btoa(ns.util.getString(genKeys.signedPreKey.signature))
             };
             jsonData.preKeys = [];
             var j = 0;
             for (var i in genKeys.preKeys) {
                 jsonData.preKeys[j++] = {
                     keyId: genKeys.preKeys[i].keyId,
-                    publicKey: btoa(getString(genKeys.preKeys[i].publicKey))
+                    publicKey: btoa(ns.util.getString(genKeys.preKeys[i].publicKey))
                 };
             }
             // Newer generation servers don't expect this BTW.
             jsonData.lastResortKey = {
                 keyId: genKeys.lastResortKey.keyId,
-                publicKey: btoa(getString(genKeys.lastResortKey.publicKey))
+                publicKey: btoa(ns.util.getString(genKeys.lastResortKey.publicKey))
             };
             return this.request({
                 call: 'keys',
@@ -239,16 +239,16 @@
             if (res.devices.constructor !== Array) {
                 throw new TypeError("Invalid response");
             }
-            res.identityKey = StringView.base64ToBytes(res.identityKey);
+            res.identityKey = ns.StringView.base64ToBytes(res.identityKey);
             res.devices.forEach(device => {
                 if (!validateResponse(device, {signedPreKey: 'object', preKey: 'object'}) ||
                     !validateResponse(device.signedPreKey, {publicKey: 'string', signature: 'string'}) ||
                     !validateResponse(device.preKey, {publicKey: 'string'})) {
                     throw new TypeError("Invalid response");
                 }
-                device.signedPreKey.publicKey = StringView.base64ToBytes(device.signedPreKey.publicKey);
-                device.signedPreKey.signature = StringView.base64ToBytes(device.signedPreKey.signature);
-                device.preKey.publicKey = StringView.base64ToBytes(device.preKey.publicKey);
+                device.signedPreKey.publicKey = ns.StringView.base64ToBytes(device.signedPreKey.publicKey);
+                device.signedPreKey.signature = ns.StringView.base64ToBytes(device.signedPreKey.signature);
+                device.preKey.publicKey = ns.StringView.base64ToBytes(device.preKey.publicKey);
             });
             return res;
         },
