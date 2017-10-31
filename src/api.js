@@ -239,16 +239,16 @@
             if (res.devices.constructor !== Array) {
                 throw new TypeError("Invalid response");
             }
-            res.identityKey = ns.StringView.base64ToBytes(res.identityKey);
+            res.identityKey = ns.util.StringView.base64ToBytes(res.identityKey);
             res.devices.forEach(device => {
                 if (!validateResponse(device, {signedPreKey: 'object', preKey: 'object'}) ||
                     !validateResponse(device.signedPreKey, {publicKey: 'string', signature: 'string'}) ||
                     !validateResponse(device.preKey, {publicKey: 'string'})) {
                     throw new TypeError("Invalid response");
                 }
-                device.signedPreKey.publicKey = ns.StringView.base64ToBytes(device.signedPreKey.publicKey);
-                device.signedPreKey.signature = ns.StringView.base64ToBytes(device.signedPreKey.signature);
-                device.preKey.publicKey = ns.StringView.base64ToBytes(device.preKey.publicKey);
+                device.signedPreKey.publicKey = ns.util.StringView.base64ToBytes(device.signedPreKey.publicKey);
+                device.signedPreKey.signature = ns.util.StringView.base64ToBytes(device.signedPreKey.signature);
+                device.preKey.publicKey = ns.util.StringView.base64ToBytes(device.preKey.publicKey);
             });
             return res;
         },
@@ -290,7 +290,6 @@
             const ptrResp = await this.request({call: 'attachment'});
             // Extract the id as a string from the location url
             // (workaround for ids too large for Javascript numbers)
-            //  XXX find way around having to know the S3 url.
             const match = ptrResp.location.match(this.attachment_id_regex);
             if (!match) {
                 console.error('Invalid attachment url for outgoing message',

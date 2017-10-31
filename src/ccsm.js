@@ -66,7 +66,7 @@
         return ns.decodeAuthToken(await ns.getEncodedAuthToken());
     };
 
-    ns.fetchResource = async function ccsm_fetchResource(urn, options) {
+    ns.fetchResource = async function(urn, options) {
         options = options || {};
         options.headers = options.headers || new Headers();
         try {
@@ -127,7 +127,7 @@
         relay.util.sleep(nextUpdate).then(ns.maintainAuthToken);
     };
 
-    ns.resolveTags = async function ccsm__resolveTags(expression) {
+    ns.resolveTags = async function(expression) {
         expression = expression && expression.trim();
         if (!expression) {
             console.warn("Empty expression detected");
