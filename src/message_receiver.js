@@ -31,11 +31,11 @@
                                        ns.replay.Type.INIT_SESSION);
         }
 
-        connect() {
+        async connect() {
             if (this._closing) {
                 throw new Error("Invalid State: Already Closed");
             }
-            this.wsr.connect();
+            await this.wsr.connect();
         }
 
         close() {
@@ -101,7 +101,7 @@
                 }
             }
             if (!this._closing) {
-                this.connect();
+                await this.connect();
             }
         }
 

@@ -41,7 +41,7 @@
             await this.registrationDone();
         }
 
-        registerDevice(name, setProvisioningUrl, confirmAddress, progressCallback) {
+        async registerDevice(name, setProvisioningUrl, confirmAddress, progressCallback) {
             console.assert(typeof name === 'string');
             const returnInterface = {waiting: true};
             const provisioningCipher = new ns.ProvisioningCipher();
@@ -70,8 +70,8 @@
                         }
                     }
                 });
-                wsr.connect();
             });
+            await wsr.connect();
 
             returnInterface.done = (async function() {
                 const provisionMessage = await provisioningCipher.decrypt(await webSocketWaiter);

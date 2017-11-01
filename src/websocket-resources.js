@@ -36,7 +36,7 @@
                     status
                 }
             }).encode().toArrayBuffer();
-            return this.wsr.socket.send(msg);
+            return this.wsr.send(msg);
         }
     }
 
@@ -51,7 +51,7 @@
                     id: this.id
                 }
             }).encode().toArrayBuffer();
-            return this.wsr.socket.send(msg);
+            return this.wsr.send(msg);
         }
     }
 
@@ -104,6 +104,7 @@
         constructor(url, opts) {
             this.url = url;
             this.socket = null;
+            this._sendQueue = [];
             this._outgoingRequests = new Map();
             this._listeners = [];
             opts = opts || {};
@@ -138,13 +139,22 @@
             this._listeners = this._listeners.filter(x => !(x[0] === event && x[1] === callback));
         }
 
-        connect() {
+        async connect() {
             this.close();
-            this.socket = new WebSocket(this.url);
+            console.info('Websocket connecting:', this.url.split('?', 1)[0]);
+            const socket = new WebSocket(this.url);
+            await new Promise((resolve, reject) => {
+                socket.addEventListener('open', resolve);
+                socket.addEventListener('error', reject);
+                socket.addEventListener('close', reject);
+            });
+            this.socket = socket;
             for (const x of this._listeners) {
                 this.socket.addEventListener(x[0], x[1]);
             }
-            console.info('Websocket connecting:', this.url.split('?', 1)[0]);
+            while (this._sendQueue.length) {
+                socket.send(this._sendQueue.shift());
+            }
         }
 
         close(code, reason) {
@@ -162,6 +172,14 @@
             this._outgoingRequests.set(request.id.toNumber(), request);
             request.send();
             return request;
+        }
+
+        send(data) {
+            if (this.socket) {
+                this.socket.send(data);
+            } else {
+                this._sendQueue.push(data);
+            }
         }
 
         async onMessage(encodedMsg) {
