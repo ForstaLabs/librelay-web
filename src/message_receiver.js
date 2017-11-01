@@ -26,16 +26,13 @@
                 this.wsr.addEventListener('close', this.onSocketClose.bind(this));
                 this.wsr.addEventListener('error', this.onSocketError.bind(this));
             }
-            // XXX strange (unused?) api...
-            ns.replay.registerFunction(this.tryMessageAgain.bind(this),
-                                       ns.replay.Type.INIT_SESSION);
         }
 
-        async connect() {
+        connect() {
             if (this._closing) {
                 throw new Error("Invalid State: Already Closed");
             }
-            await this.wsr.connect();
+            this.wsr.connect();
         }
 
         close() {
@@ -101,7 +98,7 @@
                 }
             }
             if (!this._closing) {
-                await this.connect();
+                this.connect();
             }
         }
 
