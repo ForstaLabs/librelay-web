@@ -85,15 +85,14 @@
         const resp = await fetch(url, options);
         if (!resp.ok) {
             const msg = urn + ` (${await resp.text()})`;
-            if (resp.status === 401 || resp.status === 403) {
-                console.error("Auth token is invalid.  Logging out...");
-                await ns.logout();
-                throw new Error("logout - unreachable"); // just incase logout blows up.
-            } else if (resp.status === 404) {
-                throw new ReferenceError(msg);
+            let error;
+            } if (resp.status === 404) {
+                 error = new ReferenceError(msg);
             } else {
-                throw new Error(msg);
+                error = new Error(msg);
             }
+            error.code = resp.status;
+            throw error;
         }
         return await resp.json();
     };
