@@ -86,7 +86,7 @@
         if (!resp.ok) {
             const msg = urn + ` (${await resp.text()})`;
             let error;
-            } if (resp.status === 404) {
+            if (resp.status === 404) {
                  error = new ReferenceError(msg);
             } else {
                 error = new Error(msg);
