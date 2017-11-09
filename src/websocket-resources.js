@@ -139,20 +139,21 @@
             this._listeners = this._listeners.filter(x => !(x[0] === event && x[1] === callback));
         }
 
-        connect() {
+        async connect() {
             this.close();
             console.info('Websocket connecting:', this.url.split('?', 1)[0]);
-            this.socket = new WebSocket(this.url);
+            const ws = new WebSocket(this.url);
+            await new Promise((resolve, reject) => {
+                ws.addEventListener('open', resolve);
+                ws.addEventListener('error', reject);
+            });
+            this.socket = ws;
             for (const x of this._listeners) {
                 this.socket.addEventListener(x[0], x[1]);
             }
-            if (this._sendQueue.length) {
-                this.socket.addEventListener('open', () => {
-                    while (this._sendQueue.length) {
-                        console.warn("Dequeuing deferred message");
-                        this.socket.send(this._sendQueue.shift());
-                    }
-                });
+            while (this._sendQueue.length) {
+                console.warn("Dequeuing deferred websocket message");
+                this.socket.send(this._sendQueue.shift());
             }
         }
 
