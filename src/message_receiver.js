@@ -28,11 +28,11 @@
             }
         }
 
-        connect() {
+        async connect() {
             if (this._closing) {
                 throw new Error("Invalid State: Already Closed");
             }
-            this.wsr.connect();
+            await this.wsr.connect();
         }
 
         close() {
@@ -69,7 +69,8 @@
         }
 
         onSocketError(error) {
-            console.error('Websocket error:', error);
+            console.error('Message Receiver - WebSocket error:', error);
+            throw error;
         }
 
         async onSocketClose(ev) {
@@ -98,7 +99,7 @@
                 }
             }
             if (!this._closing) {
-                this.connect();
+                await this.connect();
             }
         }
 

@@ -175,7 +175,7 @@
         }
 
         send(data) {
-            if (this.socket) {
+            if (this.socket && this.socket.readyState === WebSocket.OPEN) {
                 this.socket.send(data);
             } else {
                 this._sendQueue.push(data);
