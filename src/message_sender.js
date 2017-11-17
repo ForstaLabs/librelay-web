@@ -53,10 +53,10 @@
 
     ns.MessageSender = class MessageSender extends ns.EventTarget {
 
-        constructor(tss, addr) {
+        constructor(signal, addr) {
             super();
-            console.assert(tss && addr);
-            this.tss = tss;
+            console.assert(signal && addr);
+            this.signal = signal;
             this.addr = addr;
             ns.replay.registerFunction(this.tryMessageAgain.bind(this), ns.replay.Type.ENCRYPT_MESSAGE);
             ns.replay.registerFunction(this.retransmitMessage.bind(this), ns.replay.Type.TRANSMIT_MESSAGE);
@@ -72,14 +72,14 @@
             ptr.key = libsignal.crypto.getRandomBytes(64);
             const iv = libsignal.crypto.getRandomBytes(16);
             const encryptedBin = await ns.crypto.encryptAttachment(attachment.data, ptr.key, iv);
-            const id = await this.tss.putAttachment(encryptedBin);
+            const id = await this.signal.putAttachment(encryptedBin);
             ptr.id = id;
             ptr.contentType = attachment.type;
             return ptr;
         }
 
         retransmitMessage(addr, jsonData, timestamp) {
-            const outgoing = new ns.OutgoingMessage(this.tss);
+            const outgoing = new ns.OutgoingMessage(this.signal);
             return outgoing.transmitMessage(addr, jsonData, timestamp);
         }
 
@@ -123,7 +123,7 @@
 
         _send(msgproto, timestamp, addrs) {
             console.assert(addrs instanceof Array);
-            const outmsg = new ns.OutgoingMessage(this.tss, timestamp, msgproto);
+            const outmsg = new ns.OutgoingMessage(this.signal, timestamp, msgproto);
             outmsg.on('keychange', this.onKeyChange.bind(this));
             for (const addr of addrs) {
                 ns.queueAsync('message-send-job-' + addr, () =>

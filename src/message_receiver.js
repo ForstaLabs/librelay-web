@@ -7,15 +7,15 @@
 
     ns.MessageReceiver = class MessageReceiver extends ns.EventTarget {
 
-        constructor(tss, addr, deviceId, signalingKey, noWebSocket) {
+        constructor(signal, addr, deviceId, signalingKey, noWebSocket) {
             super();
-            console.assert(tss && addr && deviceId && signalingKey);
-            this.tss = tss;
+            console.assert(signal && addr && deviceId && signalingKey);
+            this.signal = signal;
             this.addr = addr;
             this.deviceId = deviceId;
             this.signalingKey = signalingKey;
             if (!noWebSocket) {
-                const url = this.tss.getMessageWebSocketURL();
+                const url = this.signal.getMessageWebSocketURL();
                 this.wsr = new ns.WebSocketResource(url, {
                     handleRequest: request => ns.queueAsync(this, this.handleRequest.bind(this, request)),
                     keepalive: {
@@ -47,7 +47,7 @@
             }
             let more;
             do {
-                const data = await this.tss.request({call: 'messages'});
+                const data = await this.signal.request({call: 'messages'});
                 more = data.more;
                 const deleting = [];
                 for (const envelope of data.messages) {
@@ -58,7 +58,7 @@
                         envelope.legacyMessage = dcodeIO.ByteBuffer.fromBase64(envelope.message);
                     }
                     await this.handleEnvelope(envelope);
-                    deleting.push(this.tss.request({
+                    deleting.push(this.signal.request({
                         call: 'messages',
                         httpType: 'DELETE',
                         urlParameters: `/${envelope.source}/${envelope.timestamp}`
@@ -82,7 +82,7 @@
             let attempt = 0;
             while (!this._closing) {
                 try {
-                    await this.tss.getDevices();
+                    await this.signal.getDevices();
                     break;
                 } catch(e) {
                     const backoff = Math.log1p(++attempt) * 30 * Math.random();
@@ -317,7 +317,7 @@
         }
 
         async handleAttachment(attachment) {
-            const encData = await this.tss.getAttachment(attachment.id.toString());
+            const encData = await this.signal.getAttachment(attachment.id.toString());
             const key = attachment.key.toArrayBuffer();
             attachment.data = await ns.crypto.decryptAttachment(encData, key);
         }
