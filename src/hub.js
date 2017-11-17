@@ -35,7 +35,7 @@
         return "Basic " + btoa(relay.util.getString(username) + ":" + relay.util.getString(password));
     }
 
-    const URL_CALLS = {
+    const SIGNAL_URL_CALLS = {
         accounts: "v1/accounts",
         devices: "v1/devices",
         keys: "v2/keys",
@@ -43,7 +43,7 @@
         attachment: "v1/attachments"
     };
 
-    const HTTP_MESSAGES = {
+    const SIGNAL_HTTP_MESSAGES = {
         401: "Invalid authentication or invalidated registration",
         403: "Invalid code",
         404: "Address is not registered",
@@ -68,7 +68,7 @@
             if (!param.urlParameters) {
                 param.urlParameters = '';
             }
-            const path = URL_CALLS[param.call] + param.urlParameters;
+            const path = SIGNAL_URL_CALLS[param.call] + param.urlParameters;
             const headers = new Headers();
             if (param.username && param.password) {
                 headers.set('Authorization', authHeader(param.username, param.password));
@@ -92,8 +92,8 @@
             }
             if (!resp.ok) {
                 const e = new relay.ProtocolError(resp.status, resp_content);
-                if (HTTP_MESSAGES.hasOwnProperty(e.code)) {
-                    e.message = HTTP_MESSAGES[e.code];
+                if (SIGNAL_HTTP_MESSAGES.hasOwnProperty(e.code)) {
+                    e.message = SIGNAL_HTTP_MESSAGES[e.code];
                 } else {
                     e.message = `Status code: ${e.code}`;
                 }
@@ -134,7 +134,7 @@
                 name: info.name,
                 password: info.password
             };
-            const response = await ns.fetchResource('/v1/provision/account', {
+            const response = await ns.fetchAtlas('/v1/provision/account', {
                 method: 'PUT',
                 json,
             });
@@ -400,7 +400,7 @@
         return ns.decodeAtlasToken(await ns.getEncodedAtlasToken());
     };
 
-    ns.fetchResource = async function(urn, options) {
+    ns.fetchAtlas = async function(urn, options) {
         options = options || {};
         options.headers = options.headers || new Headers();
         try {
@@ -437,7 +437,7 @@
         const refreshDelay = t => (t.payload.exp - (Date.now() / 1000)) / 2;
         if (forceRefresh || refreshDelay(token) < 1) {
             const encodedToken = await ns.getEncodedAtlasToken();
-            const resp = await ns.fetchResource('/v1/api-token-refresh/', {
+            const resp = await ns.fetchAtlas('/v1/api-token-refresh/', {
                 method: 'POST',
                 json: {token: encodedToken}
             });
@@ -475,7 +475,7 @@
             };
         }
         const q = '?expression=' + encodeURIComponent(expression);
-        const results = await ns.fetchResource('/v1/directory/user/' + q);
+        const results = await ns.fetchAtlas('/v1/directory/user/' + q);
         for (const w of results.warnings) {
             w.context = expression.substring(w.position, w.position + w.length);
         }
@@ -506,7 +506,7 @@
         const users = [];
         await Promise.all(userIds.map(id => (async function() {
             try {
-                users.push(await ns.fetchResource(`/v1/user/${id}/`));
+                users.push(await ns.fetchAtlas(`/v1/user/${id}/`));
             } catch(e) {
                 if (!(e instanceof ReferenceError)) {
                     throw e;
@@ -516,7 +516,7 @@
         })()));
         if (missing.length) {
             const query = '?id_in=' + missing.join(',');
-            const resp = await ns.fetchResource('/v1/directory/user/' + query);
+            const resp = await ns.fetchAtlas('/v1/directory/user/' + query);
             for (const user of resp.results) {
                 users.push(user);
             }
@@ -526,7 +526,7 @@
 
     ns.getDevices = async function() {
         try {
-            return (await ns.fetchResource('/v1/provision/account')).devices;
+            return (await ns.fetchAtlas('/v1/provision/account')).devices;
         } catch(e) {
             if (e instanceof ReferenceError) {
                 return undefined;
