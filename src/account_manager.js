@@ -11,9 +11,9 @@
 
     ns.AccountManager = class AccountManager extends ns.EventTarget {
 
-        constructor(server) {
+        constructor(signal) {
             super();
-            this.server = server;
+            this.signal = signal;
             this.preKeyLowWater = 10;  // Add more keys when we get this low.
             this.preKeyHighWater = 100; // Max fill level for prekeys.
         }
@@ -33,11 +33,11 @@
             console.assert(typeof name === 'string');
             const identity = await libsignal.KeyHelper.generateIdentityKeyPair();
             const devInfo = await this._generateDeviceInfo(identity, name);
-            const accountInfo = await this.server.createAccount(devInfo);
+            const accountInfo = await this.signal.createAccount(devInfo);
             await ns.store.putState('addr', accountInfo.addr);
             await this.saveDeviceState(accountInfo.addr, accountInfo);
             const keys = await this.generateKeys(this.preKeyHighWater);
-            await this.server.registerKeys(keys);
+            await this.signal.registerKeys(keys);
             await this.registrationDone();
         }
 
@@ -48,7 +48,7 @@
             const pubKey = provisioningCipher.getPublicKey();
             let wsr;
             const webSocketWaiter = new Promise((resolve, reject) => {
-                const url = this.server.getProvisioningWebSocketURL();
+                const url = this.signal.getProvisioningWebSocketURL();
                 wsr = new ns.WebSocketResource(url, {
                     keepalive: {path: '/v1/keepalive/provisioning'},
                     handleRequest: request => {
@@ -79,11 +79,11 @@
                 await confirmAddress(provisionMessage.addr);
                 const devInfo = await this._generateDeviceInfo(provisionMessage.identityKeyPair,
                                                                name);
-                await this.server.addDevice(provisionMessage.provisioningCode,
+                await this.signal.addDevice(provisionMessage.provisioningCode,
                                             provisionMessage.addr, devInfo);
                 await this.saveDeviceState(provisionMessage.addr, devInfo);
                 const keys = await this.generateKeys(this.preKeyHighWater, progressCallback);
-                await this.server.registerKeys(keys);
+                await this.signal.registerKeys(keys);
                 await this.registrationDone();
             }).call(this);
 
@@ -100,7 +100,7 @@
 
         async linkDevice(uuid, pubKey, options) {
             options = options || {};
-            const code = await this.server.getLinkDeviceVerificationCode();
+            const code = await this.signal.getLinkDeviceVerificationCode();
             const ourIdent = await ns.store.getOurIdentity();
             const pMessage = new ns.protobuf.ProvisionMessage();
             pMessage.identityKeyPrivate = ourIdent.privKey;
@@ -110,7 +110,7 @@
             const provisioningCipher = new ns.ProvisioningCipher();
             const pEnvelope = await provisioningCipher.encrypt(pubKey, pMessage);
             const pEnvBin = new Uint8Array(pEnvelope.toArrayBuffer());
-            const resp = await this.server.fetch('/v1/provisioning/' + uuid, {
+            const resp = await this.signal.fetch('/v1/provisioning/' + uuid, {
                 method: 'PUT',
                 json: {
                     body: btoa(String.fromCharCode.apply(null, pEnvBin))
@@ -125,13 +125,13 @@
         }
 
         async refreshPreKeys() {
-            const preKeyCount = await this.server.getMyKeys();
+            const preKeyCount = await this.signal.getMyKeys();
             const lastResortKey = await ns.store.loadPreKey(lastResortKeyId);
             if (preKeyCount <= this.preKeyLowWater || !lastResortKey) {
                 // The server replaces existing keys so just go to the hilt.
                 console.info("Refreshing pre-keys...");
                 const keys = await this.generateKeys(this.preKeyHighWater);
-                await this.server.registerKeys(keys);
+                await this.signal.registerKeys(keys);
             }
         }
 
@@ -223,7 +223,7 @@
         }
 
         async deleteDevice(deviceId) {
-            await this.server.deleteDevice(deviceId);
+            await this.signal.deleteDevice(deviceId);
         }
     };
 }());
