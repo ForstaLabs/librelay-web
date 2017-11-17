@@ -1,10 +1,16 @@
 // vim: ts=4:sw=4:expandtab
-/* global */
+/* global relay */
 
 (function() {
     'use strict';
 
-    const ns = self.relay = self.relay || {};
+    self.relay = self.relay || {};
+    const ns = self.relay.hub = {};
+
+    function atobJWT(str) {
+        /* See: https://github.com/yourkarma/JWT/issues/8 */
+        return atob(str.replace(/_/g, '/').replace(/-/g, '+'));
+    }
 
     function validateResponse(response, schema) {
         try {
@@ -26,7 +32,7 @@
     }
 
     function authHeader(username, password) {
-        return "Basic " + btoa(ns.util.getString(username) + ":" + ns.util.getString(password));
+        return "Basic " + btoa(relay.util.getString(username) + ":" + relay.util.getString(password));
     }
 
     const URL_CALLS = {
@@ -45,7 +51,7 @@
         417: "Address already registered"
     };
 
-    ns.TextSecureServer = function(url, username, password) {
+    ns.SignalServer = function(url, username, password) {
         if (typeof url !== 'string') {
             throw new TypeError('Invalid server url');
         }
@@ -55,8 +61,8 @@
         this.attachment_id_regex = RegExp("^https://.*/(\\d+)?");
     };
 
-    ns.TextSecureServer.prototype = {
-        constructor: ns.TextSecureServer,
+    ns.SignalServer.prototype = {
+        constructor: ns.SignalServer,
 
         request: async function(param) {
             if (!param.urlParameters) {
@@ -76,7 +82,7 @@
                 });
             } catch(e) {
                 /* Fetch throws a very boring TypeError, throw something better.. */
-                throw new ns.NetworkError(`${e.message}: ${param.call}`);
+                throw new relay.NetworkError(`${e.message}: ${param.call}`);
             }
             let resp_content;
             if ((resp.headers.get('content-type') || '').startsWith('application/json')) {
@@ -85,7 +91,7 @@
                 resp_content = await resp.text();
             }
             if (!resp.ok) {
-                const e = new ns.ProtocolError(resp.status, resp_content);
+                const e = new relay.ProtocolError(resp.status, resp_content);
                 if (HTTP_MESSAGES.hasOwnProperty(e.code)) {
                     e.message = HTTP_MESSAGES[e.code];
                 } else {
@@ -96,7 +102,7 @@
             if (resp.status !== 204) {
                 if (param.validateResponse &&
                     !validateResponse(resp_content, param.validateResponse)) {
-                    throw new ns.ProtocolError(resp.status, resp_content);
+                    throw new relay.ProtocolError(resp.status, resp_content);
                 }
                 return resp_content;
             }
@@ -111,7 +117,7 @@
                     options.headers.set('Authorization', authHeader(this.username, this.password));
                 }
             }
-            const body = options.json && ns.util.jsonThing(options.json);
+            const body = options.json && relay.util.jsonThing(options.json);
             if (body) {
                 options.headers.set('Content-Type', 'application/json; charset=utf-8');
                 options.body = body;
@@ -121,21 +127,21 @@
 
         createAccount: async function(info) {
             const json = {
-                signalingKey: btoa(ns.util.getString(info.signalingKey)),
+                signalingKey: btoa(relay.util.getString(info.signalingKey)),
                 supportsSms: false,
                 fetchesMessages: true,
                 registrationId: info.registrationId,
                 name: info.name,
                 password: info.password
             };
-            const response = await ns.ccsm.fetchResource('/v1/provision/account', {
+            const response = await ns.fetchResource('/v1/provision/account', {
                 method: 'PUT',
                 json,
             });
             info.addr = response.userId;
             info.serverUrl = response.serverUrl;
             info.deviceId = response.deviceId;
-            /* Save the new creds to our instance for future TSS API calls. */
+            /* Save the new creds to our instance for future signal API calls. */
             this.username = info.username = `${info.addr}.${info.deviceId}`;
             this.password = info.password;
             console.info("Created account device:", this.username);
@@ -148,7 +154,7 @@
             }
             console.info("Adding device to:", addr);
             const jsonData = {
-                signalingKey: btoa(ns.util.getString(info.signalingKey)),
+                signalingKey: btoa(relay.util.getString(info.signalingKey)),
                 supportsSms: false,
                 fetchesMessages: true,
                 registrationId: info.registrationId,
@@ -164,7 +170,7 @@
                 validateResponse: {deviceId: 'number'}
             });
             Object.assign(info, response);
-            /* Save the new creds to our instance for future TSS API calls. */
+            /* Save the new creds to our instance for future signal API calls. */
             this.username = info.username = `${addr}.${info.deviceId}`;
             this.password = info.password;
             return info;
@@ -193,24 +199,24 @@
 
         registerKeys: function(genKeys) {
             var jsonData = {};
-            jsonData.identityKey = btoa(ns.util.getString(genKeys.identityKey));
+            jsonData.identityKey = btoa(relay.util.getString(genKeys.identityKey));
             jsonData.signedPreKey = {
                 keyId: genKeys.signedPreKey.keyId,
-                publicKey: btoa(ns.util.getString(genKeys.signedPreKey.publicKey)),
-                signature: btoa(ns.util.getString(genKeys.signedPreKey.signature))
+                publicKey: btoa(relay.util.getString(genKeys.signedPreKey.publicKey)),
+                signature: btoa(relay.util.getString(genKeys.signedPreKey.signature))
             };
             jsonData.preKeys = [];
             var j = 0;
             for (var i in genKeys.preKeys) {
                 jsonData.preKeys[j++] = {
                     keyId: genKeys.preKeys[i].keyId,
-                    publicKey: btoa(ns.util.getString(genKeys.preKeys[i].publicKey))
+                    publicKey: btoa(relay.util.getString(genKeys.preKeys[i].publicKey))
                 };
             }
             // Newer generation servers don't expect this BTW.
             jsonData.lastResortKey = {
                 keyId: genKeys.lastResortKey.keyId,
-                publicKey: btoa(ns.util.getString(genKeys.lastResortKey.publicKey))
+                publicKey: btoa(relay.util.getString(genKeys.lastResortKey.publicKey))
             };
             return this.request({
                 call: 'keys',
@@ -239,16 +245,16 @@
             if (res.devices.constructor !== Array) {
                 throw new TypeError("Invalid response");
             }
-            res.identityKey = ns.util.StringView.base64ToBytes(res.identityKey);
+            res.identityKey = relay.util.StringView.base64ToBytes(res.identityKey);
             res.devices.forEach(device => {
                 if (!validateResponse(device, {signedPreKey: 'object', preKey: 'object'}) ||
                     !validateResponse(device.signedPreKey, {publicKey: 'string', signature: 'string'}) ||
                     !validateResponse(device.preKey, {publicKey: 'string'})) {
                     throw new TypeError("Invalid response");
                 }
-                device.signedPreKey.publicKey = ns.util.StringView.base64ToBytes(device.signedPreKey.publicKey);
-                device.signedPreKey.signature = ns.util.StringView.base64ToBytes(device.signedPreKey.signature);
-                device.preKey.publicKey = ns.util.StringView.base64ToBytes(device.preKey.publicKey);
+                device.signedPreKey.publicKey = relay.util.StringView.base64ToBytes(device.signedPreKey.publicKey);
+                device.signedPreKey.signature = relay.util.StringView.base64ToBytes(device.signedPreKey.signature);
+                device.preKey.publicKey = relay.util.StringView.base64ToBytes(device.preKey.publicKey);
             });
             return res;
         },
@@ -338,4 +344,196 @@
             });
         }
     };
+
+
+    ns.getAtlasConfig = async function() {
+        return await relay.store.getState('atlasConfig');
+    };
+
+    ns.setAtlasConfig = async function(data) {
+        await relay.store.putState('atlasConfig', data);
+    };
+
+    let _atlasUrl = 'https://api.forsta.io';
+    ns.getAtlasUrl = () => _atlasUrl;
+    ns.setAtlasUrl = url => _atlasUrl = url;
+
+    ns.decodeAtlasToken = function(encoded_token) {
+        let token;
+        try {
+            const parts = encoded_token.split('.').map(atobJWT);
+            token = {
+                header: JSON.parse(parts[0]),
+                payload: JSON.parse(parts[1]),
+                secret: parts[2]
+            };
+        } catch(e) {
+            throw new Error('Invalid Token');
+        }
+        if (!token.payload || !token.payload.exp) {
+            throw TypeError("Invalid Token");
+        }
+        if (token.payload.exp * 1000 <= Date.now()) {
+            throw Error("Expired Token");
+        }
+        return token;
+    };
+
+    ns.getEncodedAtlasToken = async function() {
+        const config = await ns.getAtlasConfig();
+        if (!config || !config.API || !config.API.TOKEN) {
+            throw ReferenceError("No Token Found");
+        }
+        return config.API.TOKEN;
+    },
+
+    ns.updateEncodedAtlasToken = async function(encodedToken) {
+        const config = await ns.getAtlasConfig();
+        if (!config || !config.API || !config.API.TOKEN) {
+            throw ReferenceError("No Token Found");
+        }
+        config.API.TOKEN = encodedToken;
+        await ns.setAtlasConfig(config);
+    },
+
+    ns.getAtlasToken = async function() {
+        return ns.decodeAtlasToken(await ns.getEncodedAtlasToken());
+    };
+
+    ns.fetchResource = async function(urn, options) {
+        options = options || {};
+        options.headers = options.headers || new Headers();
+        try {
+            const encodedToken = await ns.getEncodedAtlasToken();
+            options.headers.set('Authorization', `JWT ${encodedToken}`);
+        } catch(e) {
+            /* Almost certainly will blow up soon (via 400s), but lets not assume
+             * all API access requires auth regardless. */
+            console.warn("Auth token missing or invalid", e);
+        }
+        options.headers.set('Content-Type', 'application/json; charset=utf-8');
+        if (options.json) {
+            options.body = JSON.stringify(options.json);
+        }
+        const url = [ns.getAtlasUrl(), urn.replace(/^\//, '')].join('/');
+        const resp = await fetch(url, options);
+        if (!resp.ok) {
+            const msg = urn + ` (${await resp.text()})`;
+            let error;
+            if (resp.status === 404) {
+                 error = new ReferenceError(msg);
+            } else {
+                error = new Error(msg);
+            }
+            error.code = resp.status;
+            throw error;
+        }
+        return await resp.json();
+    };
+
+    ns.maintainAtlasToken = async function(forceRefresh, onRefresh) {
+        /* Manage auth token expiration.  This routine will reschedule itself as needed. */
+        let token = await ns.getAtlasToken();
+        const refreshDelay = t => (t.payload.exp - (Date.now() / 1000)) / 2;
+        if (forceRefresh || refreshDelay(token) < 1) {
+            const encodedToken = await ns.getEncodedAtlasToken();
+            const resp = await ns.fetchResource('/v1/api-token-refresh/', {
+                method: 'POST',
+                json: {token: encodedToken}
+            });
+            if (!resp || !resp.token) {
+                throw new TypeError("Token Refresh Error");
+            }
+            await ns.updateEncodedAtlasToken(resp.token);
+            console.info("Refreshed auth token");
+            token = await ns.getAtlasToken();
+            if (onRefresh) {
+                try {
+                    await onRefresh(token);
+                } catch(e) {
+                    console.error('onRefresh callback error:', e);
+                }
+            }
+        }
+        const nextUpdate = refreshDelay(token);
+        console.info('Will recheck auth token in ' + nextUpdate + ' seconds');
+        relay.util.sleep(nextUpdate).then(ns.maintainAtlasToken);
+    };
+
+    ns.resolveTags = async function(expression) {
+        expression = expression && expression.trim();
+        if (!expression) {
+            console.warn("Empty expression detected");
+            // Do this while the server doesn't handle empty queries.
+            return {
+                universal: '',
+                pretty: '',
+                includedTagids: [],
+                excludedTagids: [],
+                userids: [],
+                warnings: []
+            };
+        }
+        const q = '?expression=' + encodeURIComponent(expression);
+        const results = await ns.fetchResource('/v1/directory/user/' + q);
+        for (const w of results.warnings) {
+            w.context = expression.substring(w.position, w.position + w.length);
+        }
+        if (results.warnings.length) {
+            console.warn("Tag Expression Warning(s):", expression, results.warnings);
+        }
+        return results;
+    };
+
+    ns.sanitizeTags = function(expression) {
+        /* Clean up tags a bit. Add @ where needed.
+         * NOTE: This does not currently support universal format! */
+        const tagSplitRe = /([\s()^&+-]+)/;
+        const tags = [];
+        for (let tag of expression.trim().split(tagSplitRe)) {
+            if (!tag) {
+                continue;
+            } else if (tag.match(/^[a-zA-Z]/)) {
+                tag = '@' + tag;
+            }
+            tags.push(tag);
+        }
+        return tags.join(' ');
+    };
+
+    ns.getUsers = async function(userIds) {
+        const missing = [];
+        const users = [];
+        await Promise.all(userIds.map(id => (async function() {
+            try {
+                users.push(await ns.fetchResource(`/v1/user/${id}/`));
+            } catch(e) {
+                if (!(e instanceof ReferenceError)) {
+                    throw e;
+                }
+                missing.push(id);
+            }
+        })()));
+        if (missing.length) {
+            const query = '?id_in=' + missing.join(',');
+            const resp = await ns.fetchResource('/v1/directory/user/' + query);
+            for (const user of resp.results) {
+                users.push(user);
+            }
+        }
+        return users;
+    };
+
+    ns.getDevices = async function() {
+        try {
+            return (await ns.fetchResource('/v1/provision/account')).devices;
+        } catch(e) {
+            if (e instanceof ReferenceError) {
+                return undefined;
+            } else {
+                throw e;
+            }
+        }
+    };
+
 })();
