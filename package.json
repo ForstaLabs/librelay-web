@@ -1,7 +1,7 @@
 {
   "name": "librelay-web",
   "repository": "https://github.com/ForstaLabs/librelay-web.git",
-  "version": "1.5.2",
+  "version": "1.6.0",
   "license": "GPL-3.0",
   "devDependencies": {
     "grunt": "^0.4.5",

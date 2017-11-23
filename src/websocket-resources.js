@@ -70,32 +70,37 @@
                 this.disconnect = true;
             }
             this.wsr = websocketResource;
+            this._onNeedTickle = this.onNeedTickle.bind(this);
+            this._onNeedClose = this.onNeedClose.bind(this);
         }
 
-        stop() {
-            clearTimeout(this.keepAliveTimer);
-            clearTimeout(this.disconnectTimer);
+        clear() {
+            clearTimeout(this.tickleTimer);
+            clearTimeout(this.closeTimer);
         }
 
         reset() {
-            clearTimeout(this.keepAliveTimer);
-            clearTimeout(this.disconnectTimer);
-            this.keepAliveTimer = setTimeout(function() {
-                this.wsr.sendRequest({
-                    verb: 'GET',
-                    path: this.path,
-                    success: this.reset.bind(this)
-                });
-                if (this.disconnect) {
-                    // automatically disconnect if server doesn't ack
-                    this.disconnectTimer = setTimeout(function() {
-                        clearTimeout(this.keepAliveTimer);
-                        this.wsr.close(3001, 'No response to keepalive request');
-                    }.bind(this), 1000);
-                } else {
-                    this.reset();
-                }
-            }.bind(this), 50000);
+            this.clear();
+            this.tickleTimer = setTimeout(this._onNeedTickle, 45000);
+        }
+
+        onNeedTickle() {
+            this.wsr.sendRequest({
+                verb: 'GET',
+                path: this.path,
+                success: this.reset.bind(this)
+            });
+            if (this.disconnect) {
+                // automatically disconnect if server doesn't ack
+                this.closeTimer = setTimeout(this._onNeedClose, 5000);
+            } else {
+                this.reset();
+            }
+        }
+
+        onNeedClose() {
+            clearTimeout(this.tickleTimer);
+            this.wsr.close(3001, 'No response to keepalive request');
         }
     }
 
@@ -112,17 +117,14 @@
             if (typeof this.handleRequest !== 'function') {
                 this.handleRequest = request => request.respond(404, 'Not found');
             }
-            this.addEventListener('message', this.onMessage.bind(this));
             if (opts.keepalive) {
-                const keepalive = new KeepAlive(this, {
+                this.keepalive = new KeepAlive(this, {
                     path: opts.keepalive.path,
                     disconnect: opts.keepalive.disconnect
                 });
-                const resetKeepAliveTimer = keepalive.reset.bind(keepalive);
-                this.addEventListener('open', resetKeepAliveTimer);
-                this.addEventListener('message', resetKeepAliveTimer);
-                this.addEventListener('close', keepalive.stop.bind(keepalive));
+                this.addEventListener('close', this.keepalive.clear.bind(this.keepalive));
             }
+            this.addEventListener('message', this.onMessage.bind(this));
         }
 
         addEventListener(event, callback) {
@@ -150,6 +152,9 @@
             this.socket = ws;
             for (const x of this._listeners) {
                 this.socket.addEventListener(x[0], x[1]);
+            }
+            if (this.keepalive) {
+                this.keepalive.reset();
             }
             while (this._sendQueue.length) {
                 console.warn("Dequeuing deferred websocket message");
@@ -183,6 +188,9 @@
         }
 
         async onMessage(encodedMsg) {
+            if (this.keepalive) {
+                this.keepalive.reset();
+            }
             const reader = new FileReader();
             await new Promise((resolve, reject) => {
                 reader.onload = resolve;
