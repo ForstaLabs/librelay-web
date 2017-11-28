@@ -112,6 +112,7 @@
             this._sendQueue = [];
             this._outgoingRequests = new Map();
             this._listeners = [];
+            this._connectCount = 0;
             opts = opts || {};
             this.handleRequest = opts.handleRequest;
             if (typeof this.handleRequest !== 'function') {
@@ -143,8 +144,14 @@
 
         async connect() {
             this.close();
-            console.info('Websocket connecting:', this.url.split('?', 1)[0]);
+            this._connectCount++;
+            if (this._lastDuration && this._lastDuration < 10000) {
+                const delay = Math.max(5, Math.random() * this._connectCount);
+                console.warn('Throttling websocket reconnect:', delay);
+                await ns.util.sleep(delay);
+            }
             const ws = new WebSocket(this.url);
+            this._lastConnect = Date.now();
             await new Promise((resolve, reject) => {
                 ws.addEventListener('open', resolve);
                 ws.addEventListener('error', reject);
@@ -167,6 +174,7 @@
                 if (!code) {
                     code = 3000;
                 }
+                this._lastDuration = Date.now() - this._lastConnect;
                 this.socket.close(code, reason);
             }
             this.socket = null;
