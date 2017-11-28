@@ -126,7 +126,7 @@
                 this.addEventListener('close', this.keepalive.clear.bind(this.keepalive));
             }
             this.addEventListener('message', this.onMessage.bind(this));
-            this.addEventListener('onClose', this.onClose.bind(this));
+            this.addEventListener('close', this.onClose.bind(this));
         }
 
         addEventListener(event, callback) {
