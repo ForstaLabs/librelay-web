@@ -41,7 +41,7 @@
             await this.registrationDone();
         }
 
-        async registerDevice(name, setProvisioningUrl, confirmAddress, progressCallback) {
+        async registerDevice(name, onProvisionReady, confirmAddress, progressCallback) {
             console.assert(typeof name === 'string');
             const returnInterface = {waiting: true};
             const provisioningCipher = new ns.ProvisioningCipher();
@@ -54,9 +54,8 @@
                     handleRequest: request => {
                         if (request.path === "/v1/address" && request.verb === "PUT") {
                             const proto = ns.protobuf.ProvisioningUuid.decode(request.body);
-                            const uriPubKey = encodeURIComponent(btoa(ns.util.getString(pubKey)));
                             request.respond(200, 'OK');
-                            const r = setProvisioningUrl(`tsdevice:/?uuid=${proto.uuid}&pub_key=${uriPubKey}`);
+                            const r = onProvisionReady(proto.uuid, btoa(ns.util.getString(pubKey)));
                             if (r instanceof Promise) {
                                 r.catch(reject);
                             }
