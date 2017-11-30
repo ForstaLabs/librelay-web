@@ -436,27 +436,37 @@
         let token = await ns.getAtlasToken();
         const refreshDelay = t => (t.payload.exp - (Date.now() / 1000)) / 2;
         if (forceRefresh || refreshDelay(token) < 1) {
-            const encodedToken = await ns.getEncodedAtlasToken();
-            const resp = await ns.fetchAtlas('/v1/api-token-refresh/', {
-                method: 'POST',
-                json: {token: encodedToken}
-            });
-            if (!resp || !resp.token) {
-                throw new TypeError("Token Refresh Error");
+            let refreshResp;
+            try {
+                refreshResp = await ns.fetchAtlas('/v1/api-token-refresh/', {
+                    method: 'POST',
+                    json: {token: await ns.getEncodedAtlasToken()}
+                });
+            } catch(e) {
+                /* This is okay;  The token has an absolute lifetime, so we could be
+                 * on the tail end of its life.  This doesn't mean the token is invalid,
+                 * just that we can't refresh it any longer.  Eventually it will expire
+                 * and some API call will get an auth error and be forced to login again
+                 * (by design). */
+                console.warn("Unable to refresh atlas token:", e);
             }
-            await ns.updateEncodedAtlasToken(resp.token);
-            console.info("Refreshed auth token");
-            token = await ns.getAtlasToken();
-            if (onRefresh) {
-                try {
-                    await onRefresh(token);
-                } catch(e) {
-                    console.error('onRefresh callback error:', e);
+            if (refreshResp && refreshResp.token) {
+                await ns.updateEncodedAtlasToken(refreshResp.token);
+                console.info("Refreshed auth token");
+                token = await ns.getAtlasToken();
+                if (onRefresh) {
+                    try {
+                        await onRefresh(token);
+                    } catch(e) {
+                        console.error('onRefresh callback error:', e);
+                    }
                 }
             }
         }
         const nextUpdate = refreshDelay(token);
-        console.info('Will recheck auth token in ' + nextUpdate + ' seconds');
+        const updateText = nextUpdate < 86400 ? `${Math.round(nextUpdate)} second(s)` :
+                                                `${Math.round(nextUpdate / 86400)} day(s)`;
+        console.info('Will recheck auth token in ' + updateText);
         relay.util.sleep(nextUpdate).then(ns.maintainAtlasToken);
     };
 
