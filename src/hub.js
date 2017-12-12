@@ -511,22 +511,19 @@
         return tags.join(' ');
     };
 
-    ns.getUsers = async function(userIds) {
-        const missing = [];
+    ns.getUsers = async function(userIds, onlyDir) {
+        const missing = new Set(userIds);
         const users = [];
-        await Promise.all(userIds.map(id => (async function() {
-            try {
-                users.push(await ns.fetchAtlas(`/v1/user/${id}/`));
-            } catch(e) {
-                if (!(e instanceof ReferenceError)) {
-                    throw e;
-                }
-                missing.push(id);
+        if (!onlyDir) {
+            const resp = await ns.fetchAtlas('/v1/user/?id_in=' + userIds.join());
+            for (const user of resp.results) {
+                users.push(user);
+                missing.delete(user);
             }
-        })()));
-        if (missing.length) {
-            const query = '?id_in=' + missing.join(',');
-            const resp = await ns.fetchAtlas('/v1/directory/user/' + query);
+        }
+        if (missing.size) {
+            const resp = await ns.fetchAtlas('/v1/directory/user/?id_in=' +
+                                             Array.from(missing).join());
             for (const user of resp.results) {
                 users.push(user);
             }
