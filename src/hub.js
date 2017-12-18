@@ -141,6 +141,7 @@
             info.addr = response.userId;
             info.serverUrl = response.serverUrl;
             info.deviceId = response.deviceId;
+            info.instigators = response.instigators;
             /* Save the new creds to our instance for future signal API calls. */
             this.username = info.username = `${info.addr}.${info.deviceId}`;
             this.password = info.password;

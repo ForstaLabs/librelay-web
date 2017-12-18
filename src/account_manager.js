@@ -144,6 +144,7 @@
                 'registrationId',
                 'signalingKey',
                 'username',
+                'instigators'
             ];
             await Promise.all(stateKeys.map(key => ns.store.removeState(key)));
             // update our own identity key, which may have changed
