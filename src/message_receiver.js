@@ -68,9 +68,8 @@
             } while(more);
         }
 
-        onSocketError(error) {
-            console.error('Message Receiver - WebSocket error:', error);
-            throw error;
+        onSocketError(ev) {
+            console.warn('Message Receiver WebSocket error:', ev);
         }
 
         async onSocketClose(ev) {
