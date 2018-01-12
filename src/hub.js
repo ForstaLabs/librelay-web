@@ -247,16 +247,21 @@
                 throw new TypeError("Invalid response");
             }
             res.identityKey = relay.util.StringView.base64ToBytes(res.identityKey);
-            res.devices.forEach(device => {
-                if (!validateResponse(device, {signedPreKey: 'object', preKey: 'object'}) ||
-                    !validateResponse(device.signedPreKey, {publicKey: 'string', signature: 'string'}) ||
-                    !validateResponse(device.preKey, {publicKey: 'string'})) {
-                    throw new TypeError("Invalid response");
+            for (const device of res.devices) {
+                if (!validateResponse(device, {signedPreKey: 'object'}) ||
+                    !validateResponse(device.signedPreKey, {publicKey: 'string', signature: 'string'})) {
+                    throw new Error("Invalid signedPreKey");
+                }
+                if (device.preKey) {
+                    if (!validateResponse(device, {preKey: 'object'}) ||
+                        !validateResponse(device.preKey, {publicKey: 'string'})) {
+                        throw new Error("Invalid preKey");
+                    }
+                    device.preKey.publicKey = relay.util.StringView.base64ToBytes(device.preKey.publicKey);
                 }
                 device.signedPreKey.publicKey = relay.util.StringView.base64ToBytes(device.signedPreKey.publicKey);
                 device.signedPreKey.signature = relay.util.StringView.base64ToBytes(device.signedPreKey.signature);
-                device.preKey.publicKey = relay.util.StringView.base64ToBytes(device.preKey.publicKey);
-            });
+            }
             return res;
         },
 
