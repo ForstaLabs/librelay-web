@@ -112,11 +112,11 @@
                 request.respond(400, 'Invalid Resource');
                 throw new Error('Invalid WebSocket resource received');
             }
+            let envelope;
             try {
                 const data = await ns.crypto.decryptWebsocketMessage(request.body, this.signalingKey);
-                const envelope = ns.protobuf.Envelope.decode(data);
+                envelope = ns.protobuf.Envelope.decode(data);
                 envelope.timestamp = envelope.timestamp.toNumber();
-                await this.handleEnvelope(envelope);
             } catch(e) {
                 console.error("Error handling incoming message:", e);
                 request.respond(500, 'Bad encrypted websocket message');
@@ -125,7 +125,11 @@
                 await this.dispatchEvent(ev);
                 throw e;
             }
-            request.respond(200, 'OK');
+            try {
+                await this.handleEnvelope(envelope);
+            } finally {
+                request.respond(200, 'OK');
+            }
         }
 
         async handleEnvelope(envelope, reentrant) {
