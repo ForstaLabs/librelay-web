@@ -477,28 +477,26 @@
     };
 
     ns.resolveTags = async function(expression) {
-        expression = expression && expression.trim();
-        if (!expression) {
-            console.warn("Empty expression detected");
-            // Do this while the server doesn't handle empty queries.
-            return {
-                universal: '',
-                pretty: '',
-                includedTagids: [],
-                excludedTagids: [],
-                userids: [],
-                warnings: []
-            };
+        return (await ns.resolveTagsBatch([expression]))[0];
+    };
+
+    ns.resolveTagsBatch = async function(expressions) {
+        if (!expressions.length) {
+            return [];
         }
-        const q = '?expression=' + encodeURIComponent(expression);
-        const results = await ns.fetchAtlas('/v1/directory/user/' + q);
-        for (const w of results.warnings) {
-            w.context = expression.substring(w.position, w.position + w.length);
+        const resp = await ns.fetchAtlas('/v1/tagmath/', {
+            method: 'POST',
+            json: {expressions}
+        });
+        /* Enhance the warnings a bit. */
+        for (let i = 0; i < resp.results.length; i++) {
+            const res = resp.results[i];
+            const expr = expressions[i];
+            for (const w of res.warnings) {
+                w.context = expr.substr(w.position, w.length);
+            }
         }
-        if (results.warnings.length) {
-            console.warn("Tag Expression Warning(s):", expression, results.warnings);
-        }
-        return results;
+        return resp.results;
     };
 
     ns.sanitizeTags = function(expression) {
