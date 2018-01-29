@@ -61,7 +61,6 @@
             }
             await new Promise(resolve => {
                 const singleResolve = ev => {
-                    debugger;
                     resolve(ev);
                     removeEventListener('online', singleResolve);
                 };
