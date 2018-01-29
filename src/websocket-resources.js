@@ -148,7 +148,7 @@
             this._connectCount++;
             if (this._lastDuration && this._lastDuration < 10000) {
                 const delay = Math.max(5, Math.random() * this._connectCount);
-                console.warn('Throttling websocket reconnect:', delay);
+                console.warn(`Throttling websocket reconnect for ${Math.round(delay)} seconds.`);
                 await ns.util.sleep(delay);
             }
             const ws = new WebSocket(this.url);

@@ -32,7 +32,41 @@
             if (this._closing) {
                 throw new Error("Invalid State: Already Closed");
             }
-            await this.wsr.connect();
+            if (this._connecting) {
+                console.warn("Duplicate connect detected");
+            } else {
+                this._connecting = (async () => {
+                    let attempts = 0;
+                    while (!this._closing) {
+                        await this.waitTillOnline();
+                        try {
+                            await this.wsr.connect();
+                            if (attempts) {
+                                console.info("Reconnected websocket");
+                            }
+                            return;
+                        } catch(e) {
+                            console.warn(`Connect problem (${attempts++} attempts):`, e);
+                        }
+                    }
+                })();
+            }
+            await this._connecting;
+            this._connecting = null;
+        }
+
+        async waitTillOnline() {
+            if (navigator.onLine) {
+                return;
+            }
+            await new Promise(resolve => {
+                const singleResolve = ev => {
+                    debugger;
+                    resolve(ev);
+                    removeEventListener('online', singleResolve);
+                };
+                addEventListener('online', singleResolve);
+            });
         }
 
         close() {
@@ -73,33 +107,23 @@
         }
 
         async onSocketClose(ev) {
-            console.warn('Websocket closed:', ev.code, ev.reason || '');
-            if (ev.code === 3000 || this._closing) {
+            if (this._closing) {
                 return;
             }
-            // possible auth or network issue. Make a request to confirm
-            let attempt = 0;
-            while (!this._closing) {
-                try {
-                    await this.signal.getDevices();
-                    break;
-                } catch(e) {
-                    const backoff = Math.log1p(++attempt) * 30 * Math.random();
-                    if (!navigator.onLine || e instanceof ns.NetworkError) {
-                        console.warn("Network is offline or broken.");
-                    } else {
-                        console.error("Invalid network state:", e);
-                        const errorEvent = new Event('error');
-                        errorEvent.error = e;
-                        await this.dispatchEvent(errorEvent);
-                    }
-                    console.info(`Will retry network in ${backoff} seconds (attempt ${attempt}).`);
-                    await ns.util.sleep(backoff);
+            console.warn('Websocket closed:', ev.code, ev.reason || '');
+            try {
+                // possible auth or network issue. Make a request to confirm
+                await this.signal.getDevices();
+            } catch(e) {
+                if (navigator.onLine && !(e instanceof ns.NetworkError)) {
+                    // TODO: Catch auth error and unregister here?
+                    console.error("Invalid network state:", e);
+                    const errorEvent = new Event('error');
+                    errorEvent.error = e;
+                    await this.dispatchEvent(errorEvent);
                 }
             }
-            if (!this._closing) {
-                await this.connect();
-            }
+            await this.connect();
         }
 
         async handleRequest(request) {
