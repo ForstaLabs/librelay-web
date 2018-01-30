@@ -122,7 +122,9 @@
                     await this.dispatchEvent(errorEvent);
                 }
             }
-            await this.connect();
+            if (!this._closing) {
+                await this.connect();
+            }
         }
 
         async handleRequest(request) {
