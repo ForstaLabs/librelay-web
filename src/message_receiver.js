@@ -28,6 +28,20 @@
             }
         }
 
+        async checkRegistration() {
+            try {
+                // possible auth or network issue. Make a request to confirm
+                await this.signal.getDevices();
+            } catch(e) {
+                if (navigator.onLine && !(e instanceof ns.NetworkError)) {
+                    console.error("Invalid network state:", e);
+                    const ev = new Event('error');
+                    ev.error = e;
+                    await this.dispatchEvent(ev);
+                }
+            }
+        }
+
         async connect() {
             if (this._closing) {
                 throw new Error("Invalid State: Already Closed");
@@ -46,7 +60,8 @@
                             }
                             return;
                         } catch(e) {
-                            console.warn(`Connect problem (${attempts++} attempts):`, e);
+                            await this.checkRegistration();
+                            console.warn(`Connect problem (${attempts++} attempts)`);
                         }
                     }
                 })();
@@ -110,18 +125,7 @@
                 return;
             }
             console.warn('Websocket closed:', ev.code, ev.reason || '');
-            try {
-                // possible auth or network issue. Make a request to confirm
-                await this.signal.getDevices();
-            } catch(e) {
-                if (navigator.onLine && !(e instanceof ns.NetworkError)) {
-                    // TODO: Catch auth error and unregister here?
-                    console.error("Invalid network state:", e);
-                    const errorEvent = new Event('error');
-                    errorEvent.error = e;
-                    await this.dispatchEvent(errorEvent);
-                }
-            }
+            await this.checkRegistration();
             if (!this._closing) {
                 await this.connect();
             }
