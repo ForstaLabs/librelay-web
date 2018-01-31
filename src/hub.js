@@ -351,7 +351,6 @@
         }
     };
 
-
     ns.getAtlasConfig = async function() {
         return await relay.store.getState('atlasConfig');
     };
@@ -522,7 +521,7 @@
             const resp = await ns.fetchAtlas('/v1/user/?id_in=' + userIds.join());
             for (const user of resp.results) {
                 users.push(user);
-                missing.delete(user);
+                missing.delete(user.id);
             }
         }
         if (missing.size) {
