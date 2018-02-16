@@ -116,7 +116,7 @@
             if (includeSelf) {
                 const expirationStart = attrs.expiration && Date.now();
                 await this._sendSync(msgProto, attrs.timestamp, attrs.threadId,
-                                          expirationStart);
+                                     expirationStart);
             }
             return this._send(msgProto, attrs.timestamp, this.scrubSelf(attrs.addrs));
         }

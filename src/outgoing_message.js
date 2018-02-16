@@ -19,6 +19,20 @@
             this._listeners = {};
         }
 
+        async getOurAddr() {
+            if (this._ourAddr === undefined) {
+                this._ourAddr = await ns.store.getState('addr');
+            }
+            return this._ourAddr;
+        }
+
+        async getOurDeviceId() {
+            if (this._ourDeviceId === undefined) {
+                this._ourDeviceId = await ns.store.getState('deviceId');
+            }
+            return this._ourDeviceId;
+        }
+
         on(event, callback) {
             let handlers = this._listeners[event];
             if (!handlers) {
@@ -66,58 +80,70 @@
             await this.emit('sent', entry);
         }
 
-        async reloadDevicesAndSend(addr, recurse) {
+        async _sendToAddr(addr, recurse) {
             const deviceIds = await ns.store.getDeviceIds(addr);
             return await this.doSendMessage(addr, deviceIds, recurse, {});
         }
 
         async getKeysForAddr(addr, updateDevices, reentrant) {
             const _this = this;
+            const isSelf = addr === await this.getOurAddr();
+            const ourDeviceId = isSelf ? await this.getOurDeviceId() : null;
             async function handleResult(response) {
-                const jobs = [];
-                for (const x of response.devices) {
-                    jobs.push(async function(device) {
-                        device.identityKey = response.identityKey;
-                        if (updateDevices === undefined || updateDevices.indexOf(device.deviceId) > -1) {
-                            const address = new libsignal.SignalProtocolAddress(addr, device.deviceId);
-                            const builder = new libsignal.SessionBuilder(ns.store, address);
-                            try {
-                                await builder.processPreKey(device);
-                            } catch(e) {
-                                if (e.message === "Identity key changed") {
-                                    if (!reentrant) {
-                                        await _this.emit('keychange', addr, device.identityKey);
-                                        await _this.getKeysForAddr(addr, updateDevices, /*reentrant*/ true);
-                                    } else {
-                                        throw new ns.OutgoingIdentityKeyError(addr,
-                                            _this.message.toArrayBuffer(), _this.timestamp,
-                                            device.identityKey);
-                                    }
-                                } else {
-                                    throw e;
-                                }
+                await Promise.all(response.devices.map(async device => {
+                    if (isSelf && device.deviceId === ourDeviceId) {
+                        console.debug("Skipping prekey processing for self");
+                        return;
+                    }
+                    device.identityKey = response.identityKey;
+                    if (updateDevices && updateDevices.indexOf(device.deviceId) === -1) {
+                        console.error("XXX", device, updateDevices);
+                        throw new Error("XXX");
+                    }
+                    const address = new libsignal.SignalProtocolAddress(addr, device.deviceId);
+                    const builder = new libsignal.SessionBuilder(ns.store, address);
+                    try {
+                        await builder.processPreKey(device);  // Stores the session/deviceId.
+                    } catch(e) {
+                        if (e.message === "Identity key changed") {
+                            if (!reentrant) {
+                                await _this.emit('keychange', addr, device.identityKey);
+                                await _this.getKeysForAddr(addr, updateDevices, /*reentrant*/ true);
+                            } else {
+                                throw new ns.OutgoingIdentityKeyError(addr,
+                                    _this.message.toArrayBuffer(), _this.timestamp,
+                                    device.identityKey);
                             }
+                        } else {
+                            throw e;
                         }
-                    }(x));
-                }
-                await Promise.all(jobs);
+                    }
+                }));
             }
-
-            if (updateDevices === undefined) {
-                return await (handleResult(await this.signal.getKeysForAddr(addr)));
+            if (!updateDevices) {
+                try {
+                    await handleResult(await this.signal.getKeysForAddr(addr));
+                } catch(e) {
+                    if (e instanceof ns.ProtocolError && e.code === 404) {
+                        console.warn("Unregistered address (no devices):", addr);
+                        await _this.removeDeviceIdsForAddr(addr);
+                    } else {
+                        throw e;
+                    }
+                }
             } else {
-                for (const device of updateDevices) {
-                    /* NOTE: This must be serialized due to a signal bug. */
+                await Promise.all(updateDevices.map(async device => {
                     try {
                         await handleResult(await _this.signal.getKeysForAddr(addr, device));
                     } catch(e) {
-                        if (e instanceof ns.ProtocolError && e.code === 404 && device !== 1) {
+                        if (e instanceof ns.ProtocolError && e.code === 404) {
+                            console.warn("Unregistered device:", device);
                             await _this.removeDeviceIdsForAddr(addr, [device]);
                         } else {
                             throw e;
                         }
                     }
-                }
+                }));
             }
         }
 
@@ -157,11 +183,11 @@
             paddedPlaintext[plaintext.byteLength] = 0x80;
             let messages;
             try {
-                messages = await Promise.all(deviceIds.map(id => {
+                messages = await Promise.all(deviceIds.map(async id => {
                     const address = new libsignal.SignalProtocolAddress(addr, id);
                     const sessionCipher = new libsignal.SessionCipher(ns.store, address);
                     ciphers[address.getDeviceId()] = sessionCipher;
-                    return this.encryptToDevice(address, paddedPlaintext, sessionCipher);
+                    return await this.encryptToDevice(address, paddedPlaintext, sessionCipher);
                 }));
             } catch(e) {
                 this.emitError(addr, "Failed to create message", e);
@@ -182,8 +208,10 @@
                             ciphers[x].closeOpenSessionForDevice()));
                     }
                     const resetDevices = e.code === 410 ? e.response.staleDevices : e.response.missingDevices;
-                    await this.getKeysForAddr(addr, resetDevices);
-                    await this.reloadDevicesAndSend(addr, /*recurse*/ (e.code === 409));
+                    // Optimize first-contact key lookup (just get them all at once).
+                    const updateDevices = messages.length ? resetDevices : undefined;
+                    await this.getKeysForAddr(addr, updateDevices);
+                    await this._sendToAddr(addr, /*recurse*/ (e.code === 409));
                 } else if (e.code === 401 || e.code === 403) {
                     throw e;
                 } else {
@@ -208,45 +236,48 @@
             };
         }
 
-        async getStaleDeviceIdsForAddr(addr) {
+        async reopenClosedSessions(addr) {
+            // Scan the address for devices that have closed sessions and fetch
+            // new key material for said devices so we can encrypt messages for
+            // them.
             const deviceIds = await ns.store.getDeviceIds(addr);
             if (!deviceIds.length) {
-                return [];  // The server will fill us in with a 409.
+                return;
             }
-            const updateDevices = [];
-            for (const id of deviceIds) {
+            const stale = (await Promise.all(deviceIds.map(async id => {
                 const address = new libsignal.SignalProtocolAddress(addr, id);
                 const sessionCipher = new libsignal.SessionCipher(ns.store, address);
-                if (!(await sessionCipher.hasOpenSession())) {
-                    updateDevices.push(id);
-                }
+                return !(await sessionCipher.hasOpenSession()) ? id : null;
+            }))).filter(x => x !== null);
+            if (stale.length === deviceIds.length) {
+                console.debug("Reopening ALL sessions for:", addr);
+                await this.getKeysForAddr(addr);  // Get them all at once.
+            } else if (stale.length) {
+                console.debug(`Reopening ${stale.length} sessions for:`, addr);
+                await this.getKeysForAddr(addr, stale);
             }
-            return updateDevices;
         }
 
         async removeDeviceIdsForAddr(addr, deviceIdsToRemove) {
-            for (const id of deviceIdsToRemove) {
-                const encodedAddr = addr + "." + id;
-                await ns.store.removeSession(encodedAddr);
+            if (!deviceIdsToRemove) {
+                await ns.store.removeAllSessions(addr);
+            } else {
+                for (const id of deviceIdsToRemove) {
+                    const encodedAddr = addr + "." + id;
+                    await ns.store.removeSession(encodedAddr);
+                }
             }
         }
 
         async sendToAddr(addr) {
-            let updateDevices;
             try {
-                updateDevices = await this.getStaleDeviceIdsForAddr(addr);
+                await this.reopenClosedSessions(addr);
             } catch(e) {
-                this.emitError(addr, "Failed to get device ids for address " + addr, e);
+                this.emitError(addr, "Failed to reopen sessions for: " + addr, e);
                 throw e;
             }
             try {
-                await this.getKeysForAddr(addr, updateDevices);
-            } catch(e) {
-                this.emitError(addr, "Failed to retrieve new device keys for address " + addr, e);
-                throw e;
-            }
-            try {
-                await this.reloadDevicesAndSend(addr, /*recurse*/ true);
+                await this._sendToAddr(addr, /*recurse*/ true);
             } catch(e) {
                 this.emitError(addr, "Failed to send to address " + addr, e);
                 throw e;

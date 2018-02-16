@@ -214,11 +214,6 @@
                     publicKey: btoa(relay.util.getString(genKeys.preKeys[i].publicKey))
                 };
             }
-            // Newer generation servers don't expect this BTW.
-            jsonData.lastResortKey = {
-                keyId: genKeys.lastResortKey.keyId,
-                publicKey: btoa(relay.util.getString(genKeys.lastResortKey.publicKey))
-            };
             return this.request({
                 call: 'keys',
                 httpType: 'PUT',
