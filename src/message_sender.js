@@ -138,11 +138,8 @@
             await this.dispatchEvent(ev);
         }
 
-        async onKeyChange(addr, key) {
-            const ev = new Event('keychange');
-            ev.addr = addr;
-            ev.identityKey = key;
-            await this.dispatchEvent(ev);
+        async onKeyChange(e) {
+            await this.dispatchEvent(new ns.KeyChangeEvent(e));
         }
 
         async _sendSync(content, timestamp, threadId, expirationStartTimestamp) {

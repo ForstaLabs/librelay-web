@@ -179,11 +179,8 @@
                     console.warn("Ignoring MessageCounterError for:", envelope);
                     return;
                 } else if (e instanceof ns.IncomingIdentityKeyError && !reentrant) {
-                    const ev = new Event('keychange');
-                    ev.addr = e.addr;
-                    ev.identityKey = e.identityKey;
-                    await this.dispatchEvent(ev);
-                    if (ev.accepted) {
+                    await this.dispatchEvent(new ns.KeyChangeEvent(e));
+                    if (e.accepted) {
                         envelope.keyChange = true;
                         return await this.handleEnvelope(envelope, /*reentrant*/ true);
                     }

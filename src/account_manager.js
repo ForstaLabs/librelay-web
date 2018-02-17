@@ -149,7 +149,7 @@
             await Promise.all(stateKeys.map(key => ns.store.removeState(key)));
             // update our own identity key, which may have changed
             // if we're relinking after a reinstall on the master device
-            await ns.store.removeIdentityKey(addr);
+            await ns.store.removeIdentity(addr);
             await ns.store.putState('addr', addr);
             await ns.store.saveIdentity(addr, info.identityKeyPair.pubKey);
             await ns.store.saveOurIdentity(info.identityKeyPair);

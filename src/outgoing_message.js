@@ -96,23 +96,26 @@
                         return;
                     }
                     device.identityKey = response.identityKey;
-                    if (updateDevices && updateDevices.indexOf(device.deviceId) === -1) {
-                        console.error("XXX", device, updateDevices);
-                        throw new Error("XXX");
-                    }
                     const address = new libsignal.SignalProtocolAddress(addr, device.deviceId);
                     const builder = new libsignal.SessionBuilder(ns.store, address);
                     try {
                         await builder.processPreKey(device);  // Stores the session/deviceId.
                     } catch(e) {
                         if (e.message === "Identity key changed") {
+                            const keyError = new ns.OutgoingIdentityKeyError(addr,
+                                _this.message.toArrayBuffer(), _this.timestamp,
+                                device.identityKey);
+                            keyError.stack = e.stack;
+                            keyError.message = e.message;
                             if (!reentrant) {
-                                await _this.emit('keychange', addr, device.identityKey);
-                                await _this.getKeysForAddr(addr, updateDevices, /*reentrant*/ true);
+                                await _this.emit('keychange', keyError);
+                                if (!keyError.accepted) {
+                                    throw keyError;
+                                }
+                                await _this.getKeysForAddr(addr, updateDevices,
+                                                           /*reentrant*/ true);
                             } else {
-                                throw new ns.OutgoingIdentityKeyError(addr,
-                                    _this.message.toArrayBuffer(), _this.timestamp,
-                                    device.identityKey);
+                                throw keyError;
                             }
                         } else {
                             throw e;

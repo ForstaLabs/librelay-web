@@ -36,7 +36,7 @@ module.exports = function(grunt) {
           'crypto.js',
           'protobufs.js',
           'queue_async.js',
-          'websocket-resources.js',
+          'websocket_resources.js',
           'util.js',
           'event_target.js',
           'hub.js',
@@ -44,7 +44,7 @@ module.exports = function(grunt) {
           'message_receiver.js',
           'message_sender.js',
           'outgoing_message.js',
-          'ProvisioningCipher.js',
+          'provisioning_cipher.js',
         ].map(x => add_prefix('src', x)),
         dest: `${dist}/relay.js`
       }

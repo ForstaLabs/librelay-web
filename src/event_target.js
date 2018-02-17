@@ -11,6 +11,20 @@
 
     const ns = self.relay = self.relay || {};
 
+    class KeyChangeEvent extends Event {
+
+        constructor(keyError) {
+            super('keychange');
+            this.keyError = keyError;
+        }
+
+        async accept() {
+            await ns.store.removeIdentity(this.keyError.addr);
+            await ns.store.saveIdentity(this.keyError.addr, this.keyError.identityKey);
+            this.keyError.accepted = true;
+        }
+    }
+
     class EventTarget {
 
         async dispatchEvent(ev) {
@@ -60,5 +74,6 @@
         }
     }
 
+    ns.KeyChangeEvent = KeyChangeEvent;
     ns.EventTarget = EventTarget;
 }());
