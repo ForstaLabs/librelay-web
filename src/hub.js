@@ -435,7 +435,7 @@
             error.contentType = respType;
             throw error;
         }
-        return await resp.json();
+        return respContent;
     };
 
     ns.maintainAtlasToken = async function(forceRefresh, onRefresh) {
