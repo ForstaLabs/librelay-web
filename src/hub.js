@@ -84,14 +84,14 @@
                 /* Fetch throws a very boring TypeError, throw something better.. */
                 throw new relay.NetworkError(`${e.message}: ${param.call}`);
             }
-            let resp_content;
+            let respContent;
             if ((resp.headers.get('content-type') || '').startsWith('application/json')) {
-                resp_content = await resp.json();
+                respContent = await resp.json();
             } else {
-                resp_content = await resp.text();
+                respContent = await resp.text();
             }
             if (!resp.ok) {
-                const e = new relay.ProtocolError(resp.status, resp_content);
+                const e = new relay.ProtocolError(resp.status, respContent);
                 if (SIGNAL_HTTP_MESSAGES.hasOwnProperty(e.code)) {
                     e.message = SIGNAL_HTTP_MESSAGES[e.code];
                 } else {
@@ -101,10 +101,10 @@
             }
             if (resp.status !== 204) {
                 if (param.validateResponse &&
-                    !validateResponse(resp_content, param.validateResponse)) {
-                    throw new relay.ProtocolError(resp.status, resp_content);
+                    !validateResponse(respContent, param.validateResponse)) {
+                    throw new relay.ProtocolError(resp.status, respContent);
                 }
-                return resp_content;
+                return respContent;
             }
         },
 
@@ -403,13 +403,9 @@
     ns.fetchAtlas = async function(urn, options) {
         options = options || {};
         options.headers = options.headers || new Headers();
-        try {
+        if (!options.skipAuth) {
             const encodedToken = await ns.getEncodedAtlasToken();
             options.headers.set('Authorization', `JWT ${encodedToken}`);
-        } catch(e) {
-            /* Almost certainly will blow up soon (via 400s), but lets not assume
-             * all API access requires auth regardless. */
-            console.warn("Auth token missing or invalid", e);
         }
         options.headers.set('Content-Type', 'application/json; charset=utf-8');
         if (options.json) {
@@ -417,8 +413,17 @@
         }
         const url = [ns.getAtlasUrl(), urn.replace(/^\//, '')].join('/');
         const resp = await fetch(url, options);
+        let respType;
+        let respContent;
+        if ((resp.headers.get('content-type') || '').startsWith('application/json')) {
+            respContent = await resp.json();
+            respType = 'json';
+        } else {
+            respContent = await resp.text();
+            respType = 'text';
+        }
         if (!resp.ok) {
-            const msg = urn + ` (${await resp.text()})`;
+            const msg = urn + ` [${resp.status}]`;
             let error;
             if (resp.status === 404) {
                  error = new ReferenceError(msg);
@@ -426,6 +431,8 @@
                 error = new Error(msg);
             }
             error.code = resp.status;
+            error.content = respContent;
+            error.contentType = respType;
             throw error;
         }
         return await resp.json();
