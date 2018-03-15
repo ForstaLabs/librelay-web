@@ -13,9 +13,10 @@
 
     class KeyChangeEvent extends Event {
 
-        constructor(keyError) {
+        constructor(keyError, envelope) {
             super('keychange');
             this.keyError = keyError;
+            this.envelope = envelope;
         }
 
         async accept() {

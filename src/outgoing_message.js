@@ -85,6 +85,20 @@
             return await this.doSendMessage(addr, deviceIds, recurse, {});
         }
 
+        async _handleIdentityKeyError(e, addr, identityKey, forceThrow) {
+            console.assert(e.message === "Identity key changed");
+            const keyError = new ns.OutgoingIdentityKeyError(addr, this.message.toArrayBuffer(),
+                                                             this.timestamp, identityKey);
+            keyError.stack = e.stack;
+            keyError.message = e.message;
+            if (!forceThrow) {
+                await this.emit('keychange', keyError);
+            }
+            if (!keyError.accepted) {
+                throw keyError;
+            }
+        }
+
         async getKeysForAddr(addr, updateDevices, reentrant) {
             const _this = this;
             const isSelf = addr === await this.getOurAddr();
@@ -102,21 +116,9 @@
                         await builder.processPreKey(device);  // Stores the session/deviceId.
                     } catch(e) {
                         if (e.message === "Identity key changed") {
-                            const keyError = new ns.OutgoingIdentityKeyError(addr,
-                                _this.message.toArrayBuffer(), _this.timestamp,
-                                device.identityKey);
-                            keyError.stack = e.stack;
-                            keyError.message = e.message;
-                            if (!reentrant) {
-                                await _this.emit('keychange', keyError);
-                                if (!keyError.accepted) {
-                                    throw keyError;
-                                }
-                                await _this.getKeysForAddr(addr, updateDevices,
-                                                           /*reentrant*/ true);
-                            } else {
-                                throw keyError;
-                            }
+                            await _this._handleIdentityKeyError(e, addr, device.identityKey,
+                                                                /*forceThrow*/ reentrant);
+                            await _this.getKeysForAddr(addr, updateDevices, /*reentrant*/ true);
                         } else {
                             throw e;
                         }
@@ -185,17 +187,27 @@
             paddedPlaintext.set(new Uint8Array(plaintext));
             paddedPlaintext[plaintext.byteLength] = 0x80;
             let messages;
-            try {
-                messages = await Promise.all(deviceIds.map(async id => {
-                    const address = new libsignal.SignalProtocolAddress(addr, id);
-                    const sessionCipher = new libsignal.SessionCipher(ns.store, address);
-                    ciphers[address.getDeviceId()] = sessionCipher;
-                    return await this.encryptToDevice(address, paddedPlaintext, sessionCipher);
-                }));
-            } catch(e) {
-                this.emitError(addr, "Failed to create message", e);
-                return;
-            }
+            let attempts = 0;
+            do {
+                try {
+                    messages = await Promise.all(deviceIds.map(async id => {
+                        const address = new libsignal.SignalProtocolAddress(addr, id);
+                        const sessionCipher = new libsignal.SessionCipher(ns.store, address);
+                        ciphers[address.getDeviceId()] = sessionCipher;
+                        return await this.encryptToDevice(address, paddedPlaintext, sessionCipher);
+                    }));
+                } catch(e) {
+                    if (e.message === "Identity key changed") {
+                        // XXX: A little suspect, using the session's key would be better (but it's private)
+                        const identity = await ns.store.loadIdentity(addr);
+                        await this._handleIdentityKeyError(e, addr, identity.get('publicKey'),
+                                                           /*forceThrow*/ !!attempts);
+                    } else {
+                        this.emitError(addr, "Failed to create message", e);
+                        return;
+                    }
+                }
+            } while(!messages && !attempts++);
             try {
                 await this.transmitMessage(addr, messages, this.timestamp);
             } catch(e) {

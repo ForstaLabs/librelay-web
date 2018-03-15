@@ -179,10 +179,10 @@
                     console.warn("Ignoring MessageCounterError for:", envelope);
                     return;
                 } else if (e instanceof ns.IncomingIdentityKeyError && !reentrant) {
-                    await this.dispatchEvent(new ns.KeyChangeEvent(e));
+                    await this.dispatchEvent(new ns.KeyChangeEvent(e, envelope));
                     if (e.accepted) {
                         envelope.keyChange = true;
-                        return await this.handleEnvelope(envelope, /*reentrant*/ true);
+                        await this.handleEnvelope(envelope, /*reentrant*/ true);
                     }
                 } else if (e instanceof ns.RelayError) {
                     console.warn("Supressing RelayError:", e);
