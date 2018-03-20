@@ -14,6 +14,7 @@
             this.addr = addr;
             this.deviceId = deviceId;
             this.signalingKey = signalingKey;
+            this.setBusy();
             if (!noWebSocket) {
                 const url = this.signal.getMessageWebSocketURL();
                 this.wsr = new ns.WebSocketResource(url, {
@@ -26,6 +27,28 @@
                 this.wsr.addEventListener('close', this.onSocketClose.bind(this));
                 this.wsr.addEventListener('error', this.onSocketError.bind(this));
             }
+        }
+
+        setBusy() {
+            /* Users can await the .idle property to avoid working while incoming
+             * messages are being processed. */
+            if (this.busy) {
+                clearTimeout(this._idleTimeout);
+                return;  // Do not perturb existing idle promise.
+            }
+            this.busy = true;
+            console.debug("Message Receiver Busy");
+            this.idle = new Promise(resolve => {
+                this.setIdle = () => {
+                    clearTimeout(this._idleTimeout);
+                    this._idleTimeout = setTimeout(() => {
+                        this.busy = false;
+                        this._idleTimeout = undefined;
+                        console.debug("Message Receiver Idle");
+                        resolve();
+                    }, 1000);
+                };
+            });
         }
 
         async checkRegistration() {
@@ -93,6 +116,7 @@
             if (this.wsr) {
                 throw new TypeError("Fetch is invalid when websocket is in use");
             }
+            this.setBusy();
             let more;
             do {
                 const data = await this.signal.request({call: 'messages'});
@@ -114,6 +138,7 @@
                 }
                 await Promise.all(deleting);
             } while(more);
+            this.setIdle();
         }
 
         onSocketError(ev) {
@@ -135,33 +160,40 @@
             if (request.path === '/api/v1/queue/empty') {
                 console.debug("WebSocket queue empty");
                 request.respond(200, 'OK');
+                this.setIdle();
                 return;
-            } else if (request.path !== '/api/v1/message' || request.verb !== 'PUT') {
+            }
+            if (request.path !== '/api/v1/message' || request.verb !== 'PUT') {
                 console.error("Expected PUT '/api/v1/message', but got:", request.path);
                 request.respond(400, 'Invalid Resource');
                 throw new Error('Invalid WebSocket resource received');
             }
-            let envelope;
+            this.setBusy();
             try {
-                const data = await ns.crypto.decryptWebsocketMessage(request.body, this.signalingKey);
-                envelope = ns.protobuf.Envelope.decode(data);
-                envelope.timestamp = envelope.timestamp.toNumber();
-            } catch(e) {
-                console.error("Error handling incoming message:", e);
-                request.respond(500, 'Bad encrypted websocket message');
-                const ev = new Event('error');
-                ev.error = e;
-                await this.dispatchEvent(ev);
-                throw e;
-            }
-            try {
-                await this.handleEnvelope(envelope);
+                let envelope;
+                try {
+                    const data = await ns.crypto.decryptWebsocketMessage(request.body, this.signalingKey);
+                    envelope = ns.protobuf.Envelope.decode(data);
+                    envelope.timestamp = envelope.timestamp.toNumber();
+                } catch(e) {
+                    console.error("Error handling incoming message:", e);
+                    request.respond(500, 'Bad encrypted websocket message');
+                    const ev = new Event('error');
+                    ev.error = e;
+                    await this.dispatchEvent(ev);
+                    throw e;
+                }
+                try {
+                    await this.handleEnvelope(envelope);
+                } finally {
+                    request.respond(200, 'OK');
+                }
             } finally {
-                request.respond(200, 'OK');
+                this.setIdle();
             }
         }
 
-        async handleEnvelope(envelope, reentrant) {
+        async handleEnvelope(envelope, reentrant, forceAcceptKeyChange) {
             let handler;
             if (envelope.type === ns.protobuf.Envelope.Type.RECEIPT) {
                 handler = this.handleDeliveryReceipt;
@@ -179,7 +211,12 @@
                     console.warn("Ignoring MessageCounterError for:", envelope);
                     return;
                 } else if (e instanceof ns.IncomingIdentityKeyError && !reentrant) {
-                    await this.dispatchEvent(new ns.KeyChangeEvent(e, envelope));
+                    const keyChangeEvent = new ns.KeyChangeEvent(e, envelope);
+                    if (forceAcceptKeyChange) {
+                        await keyChangeEvent.accept();
+                    } else {
+                        await this.dispatchEvent(keyChangeEvent);
+                    }
                     if (e.accepted) {
                         envelope.keyChange = true;
                         await this.handleEnvelope(envelope, /*reentrant*/ true);
