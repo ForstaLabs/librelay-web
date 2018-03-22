@@ -194,6 +194,10 @@
         }
 
         async handleEnvelope(envelope, reentrant, forceAcceptKeyChange) {
+            if (await ns.store.isBlocked(envelope.source)) {
+                console.warn("Dropping message from blocked address:", envelope.source);
+                return;
+            }
             let handler;
             if (envelope.type === ns.protobuf.Envelope.Type.RECEIPT) {
                 handler = this.handleDeliveryReceipt;
@@ -377,7 +381,7 @@
         }
 
         handleBlocked(blocked) {
-            throw new Error("UNSUPPORTRED");
+            throw new Error("DEPRECATED"); // We use a higher level control proto for this.
         }
 
         async handleAttachment(attachment) {
