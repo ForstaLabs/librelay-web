@@ -116,29 +116,35 @@
             if (this.wsr) {
                 throw new TypeError("Fetch is invalid when websocket is in use");
             }
-            this.setBusy();
             let more;
-            do {
-                const data = await this.signal.request({call: 'messages'});
-                more = data.more;
-                const deleting = [];
-                for (const envelope of data.messages) {
-                    if (envelope.content) {
-                        envelope.content = dcodeIO.ByteBuffer.fromBase64(envelope.content);
+            this.setBusy();
+            try {
+                do {
+                    const data = await this.signal.request({call: 'messages'});
+                    more = data.more;
+                    const deleting = [];
+                    for (const msg of data.messages) {
+                        if (msg.content) {
+                            msg.content = dcodeIO.ByteBuffer.fromBase64(msg.content);
+                        }
+                        if (msg.message) {
+                            msg.legacyMessage = dcodeIO.ByteBuffer.fromBase64(msg.message);
+                        }
+                        delete msg.message;
+                        const envelope = new ns.protobuf.Envelope(msg);
+                        envelope.timestamp = envelope.timestamp.toNumber();
+                        await this.handleEnvelope(envelope);
+                        deleting.push(this.signal.request({
+                            call: 'messages',
+                            httpType: 'DELETE',
+                            urlParameters: `/${envelope.source}/${envelope.timestamp}`
+                        }));
                     }
-                    if (envelope.message) {
-                        envelope.legacyMessage = dcodeIO.ByteBuffer.fromBase64(envelope.message);
-                    }
-                    await this.handleEnvelope(envelope);
-                    deleting.push(this.signal.request({
-                        call: 'messages',
-                        httpType: 'DELETE',
-                        urlParameters: `/${envelope.source}/${envelope.timestamp}`
-                    }));
-                }
-                await Promise.all(deleting);
-            } while(more);
-            this.setIdle();
+                    await Promise.all(deleting);
+                } while(more);
+            } finally {
+                this.setIdle();
+            }
         }
 
         onSocketError(ev) {
