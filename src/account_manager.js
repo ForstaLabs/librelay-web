@@ -7,8 +7,6 @@
 
     const ns = self.relay = self.relay || {};
 
-    const lastResortKeyId = 0xdeadbeef & ((2 ** 31) - 1); // Must fit inside signed 32bit int.
-
     ns.AccountManager = class AccountManager extends ns.EventTarget {
 
         constructor(signal) {
@@ -125,8 +123,7 @@
 
         async refreshPreKeys() {
             const preKeyCount = await this.signal.getMyKeys();
-            const lastResortKey = await ns.store.loadPreKey(lastResortKeyId);
-            if (preKeyCount <= this.preKeyLowWater || !lastResortKey) {
+            if (preKeyCount <= this.preKeyLowWater) {
                 // The server replaces existing keys so just go to the hilt.
                 console.info("Refreshing pre-keys...");
                 const keys = await this.generateKeys(this.preKeyHighWater);
@@ -170,24 +167,10 @@
                 throw new Error('Invalid signedKeyId');
             }
 
-            let lastResortKey = await ns.store.loadPreKey(lastResortKeyId);
-            if (!lastResortKey) {
-                // Last resort key only used if our prekey pool is drained faster than
-                // we refresh it.  This prevents message dropping at the expense of
-                // forward secrecy impairment.
-                const pk = await libsignal.KeyHelper.generatePreKey(lastResortKeyId);
-                await ns.store.storePreKey(lastResortKeyId, pk.keyPair);
-                lastResortKey = pk.keyPair;
-            }
-
             const ourIdent = await ns.store.getOurIdentity();
             const result = {
                 preKeys: [],
-                identityKey: ourIdent.pubKey,
-                lastResortKey: {
-                    keyId: lastResortKeyId,
-                    publicKey: lastResortKey.pubKey
-                }
+                identityKey: ourIdent.pubKey
             };
 
             for (let keyId = startId; keyId < startId + count; ++keyId) {

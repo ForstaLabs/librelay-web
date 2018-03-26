@@ -69,12 +69,19 @@
                 return;
             }
             const ptr = new ns.protobuf.AttachmentPointer();
-            ptr.key = libsignal.crypto.getRandomBytes(64);
-            const iv = libsignal.crypto.getRandomBytes(16);
-            const encryptedBin = await ns.crypto.encryptAttachment(attachment.data, ptr.key, iv);
-            const id = await this.signal.putAttachment(encryptedBin);
-            ptr.id = id;
-            ptr.contentType = attachment.type;
+            if (attachment.key && attachment.id) {
+                console.info("Reusing existing attachment upload");
+                ptr.key = attachment.key;
+                ptr.id = attachment.id;
+                ptr.contentType = attachment.type;
+            } else {
+                ptr.key = libsignal.crypto.getRandomBytes(64);
+                const iv = libsignal.crypto.getRandomBytes(16);
+                const encryptedBin = await ns.crypto.encryptAttachment(attachment.data, ptr.key, iv);
+                const id = await this.signal.putAttachment(encryptedBin);
+                ptr.id = id;
+                ptr.contentType = attachment.type;
+            }
             return ptr;
         }
 
@@ -182,10 +189,6 @@
             const nset = new Set(addrs);
             nset.delete(this.addr);
             return Array.from(nset);
-        }
-
-        async sendMessageToAddrs(addrs, body, attachments, timestamp, expiration, flags) {
-            throw new Error("DEPRECATED");
         }
 
         async closeSession(addr, timestamp) {
