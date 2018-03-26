@@ -390,10 +390,15 @@
             throw new Error("DEPRECATED"); // We use a higher level control proto for this.
         }
 
-        async handleAttachment(attachment) {
+        async fetchAttachment(attachment) {
             const encData = await this.signal.getAttachment(attachment.id.toString());
-            const key = attachment.key.toArrayBuffer();
-            attachment.data = await ns.crypto.decryptAttachment(encData, key);
+            let key;
+            if (attachment.key instanceof ArrayBuffer) {
+                key = attachment.key;
+            } else {
+                key = attachment.key.toArrayBuffer();
+            }
+            return await ns.crypto.decryptAttachment(encData, key);
         }
 
         tryMessageAgain(from, ciphertext) {
@@ -434,15 +439,8 @@
             if (msg.expireTimer === null) {
                 msg.expireTimer = 0;
             }
-            if (msg.flags & ns.protobuf.DataMessage.Flags.END_SESSION) {
-                return msg;
-            }
             if (msg.group) {
-                // We should blow up here very soon. XXX
-                console.error("Legacy group message detected", msg);
-            }
-            if (msg.attachments) {
-                await Promise.all(msg.attachments.map(this.handleAttachment.bind(this)));
+                throw new Error("Legacy group message");
             }
             return msg;
         }
