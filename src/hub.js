@@ -518,11 +518,11 @@
 
     ns.getUsers = async function(userIds, onlyDir) {
         const missing = new Set(userIds);
-        const users = [];
+        const users = {};
         if (!onlyDir) {
             const resp = await ns.fetchAtlas('/v1/user/?id_in=' + userIds.join());
             for (const user of resp.results) {
-                users.push(user);
+                users[user.id] = user;
                 missing.delete(user.id);
             }
         }
@@ -530,10 +530,11 @@
             const resp = await ns.fetchAtlas('/v1/directory/user/?id_in=' +
                                              Array.from(missing).join());
             for (const user of resp.results) {
-                users.push(user);
+                users[user.id] = user;
             }
         }
-        return users;
+        // Return in original order
+        return userIds.map(id => users[id]);
     };
 
     ns.getDevices = async function() {
