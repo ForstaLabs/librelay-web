@@ -11,12 +11,11 @@
 
     const ns = self.relay = self.relay || {};
 
-    class KeyChangeEvent extends Event {
+    class KeyChangeEvent {
 
-        constructor(keyError, envelope) {
-            super('keychange');
+        constructor(keyError) {
+            this.type = 'keychange';
             this.keyError = keyError;
-            this.envelope = envelope;
         }
 
         async accept() {
@@ -29,7 +28,7 @@
     class EventTarget {
 
         async dispatchEvent(ev) {
-            if (!(ev instanceof Event)) {
+            if (!ev.type) {
                 throw new TypeError('Expects an event');
             }
             if (!this._listeners || !this._listeners[ev.type]) {
