@@ -438,6 +438,20 @@
         return respContent;
     };
 
+    ns.fetchAtlasPaged = async function(urn, options) {
+        /* Use this specifically for paged resources like /v1/tag */
+        const searchSep = urn.indexOf('?') === -1 ? '?' : '&';
+        const results = [];
+        let next = -1;
+        while (next) {
+            const pageUrn = next !== -1 ? (urn + searchSep + next) : urn;
+            const page = await ns.fetchAtlas(pageUrn, options);
+            results.push.apply(results, page.results);
+            next = page.next && page.next.split('?')[1];
+        }
+        return {results};
+    };
+
     ns.maintainAtlasToken = async function(forceRefresh, onRefresh) {
         /* Manage auth token expiration.  This routine will reschedule itself as needed. */
         let token = await ns.getAtlasToken();
