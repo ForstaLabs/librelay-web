@@ -445,9 +445,14 @@
         let next = -1;
         while (next) {
             const pageUrn = next !== -1 ? (urn + searchSep + next) : urn;
-            const page = await ns.fetchAtlas(pageUrn, options);
-            results.push.apply(results, page.results);
-            next = page.next && page.next.split('?')[1];
+            const resp = await ns.fetchAtlas(pageUrn, options);
+            if (resp.results && resp.hasOwnProperty('next')) {
+                results.push.apply(results, resp.results);
+                next = resp.next && resp.next.split('?')[1];
+            } else {
+                console.error("Paged API used for non-paged API:", urn);
+                return resp;
+            }
         }
         return {results};
     };
