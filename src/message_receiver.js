@@ -424,8 +424,8 @@
             await Promise.all(deviceIds.map(deviceId => {
                 const address = new libsignal.SignalProtocolAddress(addr, deviceId);
                 const sessionCipher = new libsignal.SessionCipher(ns.store, address);
-                console.warn('Closing session for', addr, deviceId);
-                return sessionCipher.closeOpenSessionForDevice();
+                console.warn('Deleting sessions for', addr, deviceId);
+                return sessionCipher.deleteAllSessionsForDevice();
             }));
         }
 

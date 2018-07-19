@@ -198,17 +198,21 @@
             const content = new ns.protobuf.Content();
             const data = content.dataMessage = new ns.protobuf.DataMessage();
             data.flags = ns.protobuf.DataMessage.Flags.END_SESSION;
+            async function deleteSessions() {
+                const deviceIds = await ns.store.getDeviceIds(addr);
+                await Promise.all(deviceIds.map(deviceId => {
+                    const address = new libsignal.SignalProtocolAddress(addr, deviceId);
+                    const sessionCipher = new libsignal.SessionCipher(ns.store, address);
+                    return sessionCipher.deleteAllSessionsForDevice();
+                }));
+            }
+            await deleteSessions();  // Clear before so endsession is a prekey bundle
             const outmsg = this._send(content, timestamp, [addr]);
-            const deviceIds = await ns.store.getDeviceIds(addr);
             await new Promise(resolve => {
                 outmsg.on('sent', resolve);
                 outmsg.on('error', resolve);
             });
-            await Promise.all(deviceIds.map(deviceId => {
-                const address = new libsignal.SignalProtocolAddress(addr, deviceId);
-                const sessionCipher = new libsignal.SessionCipher(ns.store, address);
-                return sessionCipher.closeOpenSessionForDevice();
-            }));
+            await deleteSessions();  // Clear after so don't use the reopened session from the end msg
         }
     };
 })();
