@@ -294,7 +294,9 @@
 
         async handleSentMessage(sent, envelope) {
             if (sent.message.flags & ns.protobuf.DataMessage.Flags.END_SESSION) {
-                await this.handleEndSession(sent.destination);
+                console.error("Self-device end-session is unsupported");
+                return;
+                //await this.handleEndSession(sent.destination);
             }
             await this.processDecrypted(sent.message, this.addr);
             const ev = new Event('sent');
@@ -313,7 +315,7 @@
 
         async handleDataMessage(message, envelope, content) {
             if (message.flags & ns.protobuf.DataMessage.Flags.END_SESSION) {
-                await this.handleEndSession(envelope.source);
+                await this.handleEndSession(envelope.source, envelope.sourceDevice);
             }
             await this.processDecrypted(message, envelope.source);
             const ev = new Event('message');
@@ -401,30 +403,12 @@
             return await ns.crypto.decryptAttachment(encData, key);
         }
 
-        tryMessageAgain(from, ciphertext) {
-            const address = libsignal.SignalProtocolAddress.fromString(from);
-            const sessionCipher = new libsignal.SessionCipher(ns.store, address);
-            console.warn('retrying prekey whisper message');
-            return this.decryptPreKeyWhisperMessage(ciphertext, sessionCipher, address).then(function(plaintext) {
-                const finalMessage = ns.protobuf.DataMessage.decode(plaintext);
-                let p = Promise.resolve();
-                if ((finalMessage.flags & ns.protobuf.DataMessage.Flags.END_SESSION)
-                        == ns.protobuf.DataMessage.Flags.END_SESSION &&
-                        finalMessage.sync !== null) {
-                        p = this.handleEndSession(address.getName());
-                }
-                return p.then(function() {
-                    return this.processDecrypted(finalMessage);
-                }.bind(this));
-            }.bind(this));
-        }
-
-        async handleEndSession(addr) {
-            const deviceIds = await ns.store.getDeviceIds(addr);
-            await Promise.all(deviceIds.map(deviceId => {
-                const address = new libsignal.SignalProtocolAddress(addr, deviceId);
+        async handleEndSession(addr, deviceId) {
+            const deviceIds = deviceId == null ? (await ns.store.getDeviceIds(addr)) : [deviceId];
+            await Promise.all(deviceIds.map(id => {
+                const address = new libsignal.SignalProtocolAddress(addr, id);
                 const sessionCipher = new libsignal.SessionCipher(ns.store, address);
-                console.warn('Deleting sessions for', addr, deviceId);
+                console.warn(`Deleting sessions for: ${address}`);
                 return sessionCipher.deleteAllSessionsForDevice();
             }));
         }
