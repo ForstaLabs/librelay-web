@@ -22,14 +22,14 @@
                 name,
                 identityKeyPair,
                 signalingKey: libsignal.crypto.getRandomBytes(32 + 20),
-                registrationId: libsignal.KeyHelper.generateRegistrationId(),
+                registrationId: libsignal.keyhelper.generateRegistrationId(),
                 password: passwd.substring(0, passwd.length - 2)
             };
         }
 
         async registerAccount(name) {
             console.assert(typeof name === 'string');
-            const identity = await libsignal.KeyHelper.generateIdentityKeyPair();
+            const identity = await libsignal.keyhelper.generateIdentityKeyPair();
             const devInfo = await this._generateDeviceInfo(identity, name);
             const accountInfo = await this.signal.createAccount(devInfo);
             await ns.store.putState('addr', accountInfo.addr);
@@ -174,7 +174,7 @@
             };
 
             for (let keyId = startId; keyId < startId + count; ++keyId) {
-                const preKey = await libsignal.KeyHelper.generatePreKey(keyId);
+                const preKey = await libsignal.keyhelper.generatePreKey(keyId);
                 await ns.store.storePreKey(preKey.keyId, preKey.keyPair);
                 result.preKeys.push({
                     keyId: preKey.keyId,
@@ -185,7 +185,7 @@
                 }
             }
 
-            const sprekey = await libsignal.KeyHelper.generateSignedPreKey(ourIdent, signedKeyId);
+            const sprekey = await libsignal.keyhelper.generateSignedPreKey(ourIdent, signedKeyId);
             await ns.store.storeSignedPreKey(sprekey.keyId, sprekey.keyPair);
             result.signedPreKey = {
                 keyId: sprekey.keyId,

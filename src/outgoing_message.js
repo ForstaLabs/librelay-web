@@ -181,11 +181,9 @@
         async doSendMessage(addr, deviceIds, recurse) {
             const ciphers = {};
             const plaintext = this.message.toArrayBuffer();
-            const paddedPlaintext = new Uint8Array(
-                this.getPaddedMessageLength(plaintext.byteLength + 1) - 1
-            );
-            paddedPlaintext.set(new Uint8Array(plaintext));
-            paddedPlaintext[plaintext.byteLength] = 0x80;
+            const paddedtext = new Uint8Array(this.getPaddedMessageLength(plaintext.byteLength + 1) - 1);
+            paddedtext.set(new Uint8Array(plaintext));
+            paddedtext[plaintext.byteLength] = 0x80;
             let messages;
             let attempts = 0;
             do {
@@ -194,7 +192,7 @@
                         const address = new libsignal.SignalProtocolAddress(addr, id);
                         const sessionCipher = new libsignal.SessionCipher(ns.store, address);
                         ciphers[address.getDeviceId()] = sessionCipher;
-                        return await this.encryptToDevice(address, paddedPlaintext, sessionCipher);
+                        return this.toJSON(address, await sessionCipher.encrypt(paddedtext.buffer));
                     }));
                 } catch(e) {
                     if (e.message === "Identity key changed") {
@@ -235,11 +233,6 @@
                 }
             }
             this.emitSent(addr);
-        }
-
-        async encryptToDevice(address, plaintext, sessionCipher) {
-            const ciphertext = await sessionCipher.encrypt(plaintext);
-            return this.toJSON(address, ciphertext);
         }
 
         toJSON(address, encryptedMsg) {

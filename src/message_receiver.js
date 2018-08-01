@@ -269,27 +269,23 @@
             const addr = new libsignal.SignalProtocolAddress(envelope.source, envelope.sourceDevice);
             const sessionCipher = new libsignal.SessionCipher(ns.store, addr);
             const envTypes = ns.protobuf.Envelope.Type;
+            const cipherBuf = ciphertext.toArrayBuffer();
+            let plainBuf;
             if (envelope.type === envTypes.CIPHERTEXT) {
-                return await sessionCipher.decryptWhisperMessage(ciphertext).then(this.unpad);
+                plainBuf = await sessionCipher.decryptWhisperMessage(cipherBuf);
             } else if (envelope.type === envTypes.PREKEY_BUNDLE) {
-                return await this.decryptPreKeyWhisperMessage(ciphertext, sessionCipher, addr);
+                try {
+                    plainBuf = await sessionCipher.decryptPreKeyWhisperMessage(cipherBuf);
+                } catch(e) {
+                    if (e.message === 'Unknown identity key') {
+                        throw new ns.IncomingIdentityKeyError(addr.toString(), cipherBuf, e.identityKey);
+                    }
+                    throw e;
+                }
             } else {
                 throw new TypeError("Unknown message type:" + envelope.type);
             }
-        }
-
-        async decryptPreKeyWhisperMessage(ciphertext, sessionCipher, address) {
-            try {
-                return this.unpad(await sessionCipher.decryptPreKeyWhisperMessage(ciphertext));
-            } catch(e) {
-                if (e.message === 'Unknown identity key') {
-                    const cipherBuf = ciphertext instanceof ArrayBuffer ? ciphertext :
-                        ciphertext.toArrayBuffer();
-                    throw new ns.IncomingIdentityKeyError(address.toString(), cipherBuf,
-                                                          e.identityKey);
-                }
-                throw e;
-            }
+            return this.unpad(plainBuf);
         }
 
         async handleSentMessage(sent, envelope) {
