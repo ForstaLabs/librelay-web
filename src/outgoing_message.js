@@ -305,7 +305,7 @@
             try {
                 await this.initSessions(encodedAddr);
             } catch(e) {
-                this.emitError(addr, "Failed to init sessions for: " + encodedAddr, e);
+                this.emitError(encodedAddr, "Failed to init sessions for: " + encodedAddr, e);
                 throw e;
             }
             const addrTuple = ns.util.unencodeAddr(encodedAddr);
@@ -318,7 +318,7 @@
                     await this._sendToAddr(addr, /*recurse*/ true);
                 }
             } catch(e) {
-                this.emitError(addr, "Failed to send to address " + addr, e);
+                this.emitError(encodedAddr, "Failed to send to address " + encodedAddr, e);
                 throw e;
             }
         }
