@@ -232,17 +232,22 @@
                         envelope.keyChange = true;
                         await this.handleEnvelope(envelope, /*reentrant*/ true);
                     }
+                    return;
                 } else if (e instanceof libsignal.SessionError) {
                     const fqAddr = `${envelope.source}.${envelope.sourceDevice}`;
-                    console.error(`Session error for: ${fqAddr}`, e);
+                    console.error(`Session error for ${fqAddr}:`, e);
+                    if (e instanceof libsignal.PreKeyError) {
+                        console.warn("Refreshing prekeys...");
+                        const keys = await (new ns.AccountManager(this.signal)).generateKeys();
+                        await this.signal.registerKeys(keys);
+                    }
                     console.warn("Attempting session reset/retransmit for:", envelope.timestamp);
                     await this._sender.closeSession(fqAddr, {retransmit: envelope.timestamp});
-                } else {
-                    const ev = new Event('error');
-                    ev.error = e;
-                    ev.proto = envelope;
-                    await this.dispatchEvent(ev);
                 }
+                const ev = new Event('error');
+                ev.error = e;
+                ev.proto = envelope;
+                await this.dispatchEvent(ev);
             }
         }
 
@@ -284,9 +289,8 @@
 
         async handleSentMessage(sent, envelope) {
             if (sent.message.flags & ns.protobuf.DataMessage.Flags.END_SESSION) {
-                console.error("Self-device end-session is unsupported");
+                console.error("Unsupported syncMessage end-session sent by device:", envelope.sourceDevice);
                 return;
-                //await this.handleEndSession(sent.destination);
             }
             await this.processDecrypted(sent.message, this.addr);
             const ev = new Event('sent');
@@ -395,10 +399,10 @@
 
         async handleEndSession(addr, deviceId) {
             const deviceIds = deviceId == null ? (await ns.store.getDeviceIds(addr)) : [deviceId];
+            console.warn(`Handle end-session for: ${addr}`);
             await Promise.all(deviceIds.map(id => {
                 const address = new libsignal.ProtocolAddress(addr, id);
                 const sessionCipher = new libsignal.SessionCipher(ns.store, address);
-                console.warn(`Closing open session for: ${address}`);
                 return sessionCipher.closeOpenSession();
             }));
         }

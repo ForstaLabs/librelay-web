@@ -5,42 +5,10 @@
     self.relay = self.relay || {};
     const ns = self.relay.util = {};
 
-    /*********************************
-     *** Type conversion utilities ***
-     *********************************/
-    // Strings/arrays
     //TODO: Throw all this shit in favor of consistent types
-    var StaticByteBufferProto = new dcodeIO.ByteBuffer().__proto__;
-    var StaticArrayBufferProto = new ArrayBuffer().__proto__;
-    var StaticUint8ArrayProto = new Uint8Array().__proto__;
-
-    function getStringable(thing) {
-        return (typeof thing == "string" || typeof thing == "number" || typeof thing == "boolean" ||
-                (thing === Object(thing) &&
-                    (thing.__proto__ == StaticArrayBufferProto ||
-                    thing.__proto__ == StaticUint8ArrayProto ||
-                    thing.__proto__ == StaticByteBufferProto)));
-    }
-
-    function ensureStringed(thing) {
-        if (getStringable(thing))
-            return ns.getString(thing);
-        else if (thing instanceof Array) {
-            const res = [];
-            for (var i = 0; i < thing.length; i++)
-                res[i] = ensureStringed(thing[i]);
-            return res;
-        } else if (thing === Object(thing)) {
-            const res = {};
-            for (var key in thing)
-                res[key] = ensureStringed(thing[key]);
-            return res;
-        } else if (thing === null) {
-            return null;
-        }
-        throw new Error("unsure of how to jsonify object of type " + typeof thing);
-
-    }
+    const StaticByteBufferProto = new dcodeIO.ByteBuffer().__proto__;
+    const StaticArrayBufferProto = new ArrayBuffer().__proto__;
+    const StaticUint8ArrayProto = new Uint8Array().__proto__;
 
     ns.getString = function(thing) {
         if (thing === Object(thing)) {
@@ -63,10 +31,6 @@
             tuple[1] = parseInt(tuple[1]);
         }
         return tuple;
-    };
-
-    ns.jsonThing = function(thing) {
-        return JSON.stringify(ensureStringed(thing));
     };
 
     const _maxTimeout = 0x7fffffff;  // `setTimeout` max valid value.

@@ -77,7 +77,6 @@
             try {
                 resp = await this.fetch(path, {
                     method: param.httpType || 'GET',
-                    jsonData: param.jsonData,  // legacy..
                     json: param.json,
                     headers
                 });
@@ -121,9 +120,6 @@
             let body;
             if (options.json) {
                 body = JSON.stringify(options.json);
-            } else if (options.jsonData) {
-                console.warn("Using deprecated jsonThing function for:", options.jsonData);
-                body = relay.util.jsonThing(options.jsonData);
             }
             if (body) {
                 options.headers.set('Content-Type', 'application/json; charset=utf-8');
@@ -206,17 +202,17 @@
         },
 
         registerKeys: function(genKeys) {
-            var jsonData = {};
-            jsonData.identityKey = btoa(relay.util.getString(genKeys.identityKey));
-            jsonData.signedPreKey = {
+            const json = {};
+            json.identityKey = btoa(relay.util.getString(genKeys.identityKey));
+            json.signedPreKey = {
                 keyId: genKeys.signedPreKey.keyId,
                 publicKey: btoa(relay.util.getString(genKeys.signedPreKey.publicKey)),
                 signature: btoa(relay.util.getString(genKeys.signedPreKey.signature))
             };
-            jsonData.preKeys = [];
+            json.preKeys = [];
             var j = 0;
             for (var i in genKeys.preKeys) {
-                jsonData.preKeys[j++] = {
+                json.preKeys[j++] = {
                     keyId: genKeys.preKeys[i].keyId,
                     publicKey: btoa(relay.util.getString(genKeys.preKeys[i].publicKey))
                 };
@@ -224,7 +220,7 @@
             return this.request({
                 call: 'keys',
                 httpType: 'PUT',
-                jsonData
+                json
             });
         },
 

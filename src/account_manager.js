@@ -34,7 +34,7 @@
             const accountInfo = await this.signal.createAccount(devInfo);
             await ns.store.putState('addr', accountInfo.addr);
             await this.saveDeviceState(accountInfo.addr, accountInfo);
-            const keys = await this.generateKeys(this.preKeyHighWater);
+            const keys = await this.generateKeys();
             await this.signal.registerKeys(keys);
             await this.registrationDone();
         }
@@ -79,7 +79,7 @@
                 await this.signal.addDevice(provisionMessage.provisioningCode,
                                             provisionMessage.addr, devInfo);
                 await this.saveDeviceState(provisionMessage.addr, devInfo);
-                const keys = await this.generateKeys(this.preKeyHighWater, progressCallback);
+                const keys = await this.generateKeys(progressCallback);
                 await this.signal.registerKeys(keys);
                 await this.registrationDone();
             }).call(this);
@@ -126,7 +126,7 @@
             if (preKeyCount <= this.preKeyLowWater) {
                 // The server replaces existing keys so just go to the hilt.
                 console.info("Refreshing pre-keys...");
-                const keys = await this.generateKeys(this.preKeyHighWater);
+                const keys = await this.generateKeys();
                 await this.signal.registerKeys(keys);
             }
         }
@@ -153,18 +153,18 @@
             await Promise.all(stateKeys.map(key => ns.store.putState(key, info[key])));
         }
 
-        async generateKeys(count, progressCallback) {
+        async generateKeys(progressCallback) {
             if (typeof progressCallback !== 'function') {
                 progressCallback = undefined;
             }
+            const count = this.preKeyHighWater;
             const startId = await ns.store.getState('maxPreKeyId', 1);
             const signedKeyId = await ns.store.getState('signedKeyId', 1);
-
-            if (typeof startId != 'number') {
-                throw new Error('Invalid maxPreKeyId');
+            if (typeof startId !== 'number') {
+                throw new TypeError('Invalid maxPreKeyId');
             }
-            if (typeof signedKeyId != 'number') {
-                throw new Error('Invalid signedKeyId');
+            if (typeof signedKeyId !== 'number') {
+                throw new TypeError('Invalid signedKeyId');
             }
 
             const ourIdent = await ns.store.getOurIdentity();

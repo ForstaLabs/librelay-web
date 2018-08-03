@@ -65,7 +65,6 @@
             }
             const ptr = new ns.protobuf.AttachmentPointer();
             if (attachment.key && attachment.id) {
-                console.info("Reusing existing attachment upload");
                 ptr.key = attachment.key;
                 ptr.id = attachment.id;
                 ptr.contentType = attachment.type;
