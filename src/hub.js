@@ -77,7 +77,8 @@
             try {
                 resp = await this.fetch(path, {
                     method: param.httpType || 'GET',
-                    json: param.jsonData,
+                    jsonData: param.jsonData,  // legacy..
+                    json: param.json,
                     headers
                 });
             } catch(e) {
@@ -117,7 +118,13 @@
                     options.headers.set('Authorization', authHeader(this.username, this.password));
                 }
             }
-            const body = options.json && relay.util.jsonThing(options.json);
+            let body;
+            if (options.json) {
+                body = JSON.stringify(options.json);
+            } else if (options.jsonData) {
+                console.warn("Using deprecated jsonThing function for:", options.jsonData);
+                body = relay.util.jsonThing(options.jsonData);
+            }
             if (body) {
                 options.headers.set('Content-Type', 'application/json; charset=utf-8');
                 options.body = body;
@@ -154,7 +161,7 @@
                 throw new ReferenceError("Missing Key(s)");
             }
             console.info("Adding device to:", addr);
-            const jsonData = {
+            const json = {
                 signalingKey: btoa(relay.util.getString(info.signalingKey)),
                 supportsSms: false,
                 fetchesMessages: true,
@@ -165,7 +172,7 @@
                 httpType: 'PUT',
                 call: 'devices',
                 urlParameters: '/' + code,
-                jsonData,
+                json,
                 username: addr,
                 password: info.password,
                 validateResponse: {deviceId: 'number'}
@@ -261,7 +268,7 @@
         },
 
         sendMessages: function(destination, messageArray, timestamp) {
-            var jsonData = {
+            const json = {
                 messages: messageArray,
                 timestamp: timestamp
             };
@@ -269,7 +276,16 @@
                 call: 'messages',
                 httpType: 'PUT',
                 urlParameters: '/' + destination,
-                jsonData
+                json
+            });
+        },
+
+        sendMessage: function(addr, deviceId, message) {
+            return this.request({
+                call: 'messages',
+                httpType: 'PUT',
+                urlParameters: `/${addr}/${deviceId}`,
+                json: message
             });
         },
 
@@ -338,7 +354,7 @@
                 call: 'accounts',
                 httpType: 'PUT',
                 urlParameters: '/gcm',
-                jsonData: {
+                json: {
                     gcmRegistrationId: gcm_reg_id,
                     webSocketChannel: true
                 }

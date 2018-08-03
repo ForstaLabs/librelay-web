@@ -10,9 +10,6 @@
 
         constructor(options) {
             Object.assign(this, options);
-            if (typeof this.timestamp !== 'number') {
-                throw new Error('Invalid timestamp');
-            }
             if (this.expiration !== undefined && this.expiration !== null) {
                 if (typeof this.expiration !== 'number' || !(this.expiration >= 0)) {
                     throw new Error('Invalid expiration');
@@ -51,6 +48,7 @@
         }
     }
 
+
     ns.MessageSender = class MessageSender extends ns.EventTarget {
 
         constructor(signal, addr) {
@@ -80,17 +78,6 @@
                 ptr.contentType = attachment.type;
             }
             return ptr;
-        }
-
-        retransmitMessage(addr, jsonData, timestamp) {
-            const outgoing = new ns.OutgoingMessage(this.signal);
-            return outgoing.transmitMessage(addr, jsonData, timestamp);
-        }
-
-        async tryMessageAgain(addr, encodedMessage, timestamp) {
-            const content = new ns.protobuf.Content();
-            content.dataMessage = ns.protobuf.DataMessage.decode(encodedMessage);
-            return this._send(content, timestamp, [addr]);
         }
 
         async uploadAttachments(message) {
@@ -180,16 +167,27 @@
             return Array.from(nset);
         }
 
-        async closeSession(addr, timestamp) {
-            if (!timestamp) {
-                timestamp = Date.now();
-            }
-            const content = new ns.protobuf.Content();
-            const data = content.dataMessage = new ns.protobuf.DataMessage();
-            data.flags = ns.protobuf.DataMessage.Flags.END_SESSION;
+        async closeSession(encodedAddr, options) {
+            const msg = new Message({
+                flags: ns.protobuf.DataMessage.Flags.END_SESSION,
+                timestamp: Date.now(),
+                body: [{
+                    version: 1,
+                    messageType: 'control',
+                    messageId: 'deadbeef-1111-2222-3333-000000000000', // Avoid breaking clients while prototyping
+                    threadId: 'deadbeef-1111-2222-3333-000000000000', // Avoid breaking clients while prototyping
+                    data: {
+                        control: 'closeSession',
+                        retransmit: options.retransmit
+                    }
+                }]
+            });
+            const addrTuple = ns.util.unencodeAddr(encodedAddr);
+            const addr = addrTuple[0];
+            const deviceId = addrTuple[1];
+            const deviceIds = deviceId ? [deviceId] :  await ns.store.getDeviceIds(addr);
 
-            async function _close() {
-                const deviceIds = await ns.store.getDeviceIds(addr);
+            async function _closeOpenSessions() {
                 await Promise.all(deviceIds.map(deviceId => {
                     const address = new libsignal.ProtocolAddress(addr, deviceId);
                     const sessionCipher = new libsignal.SessionCipher(ns.store, address);
@@ -197,13 +195,16 @@
                 }));
             }
 
-            await _close();  // Clear before so endsession is a prekey bundle
-            const outmsg = this._send(content, timestamp, [addr]);
-            await new Promise(resolve => {
-                outmsg.on('sent', resolve);
-                outmsg.on('error', resolve);
-            });
-            await _close();  // Clear after so don't use the reopened session from the end msg
+            await _closeOpenSessions();  // Clear before so endsession is a prekey bundle
+            const outmsg = this._send(msg.toProto(), Date.now(), [encodedAddr]);
+            try {
+                await new Promise((resolve, reject) => {
+                    outmsg.on('sent', resolve);
+                    outmsg.on('error', reject);
+                });
+            } finally {
+                await _closeOpenSessions();  // Clear after so don't use the reopened session from the end msg
+            }
         }
     };
 })();

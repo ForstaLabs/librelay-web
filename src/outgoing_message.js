@@ -76,11 +76,6 @@
             await this.emit('sent', entry);
         }
 
-        async _sendToAddr(addr, recurse) {
-            const deviceIds = await ns.store.getDeviceIds(addr);
-            return await this.doSendMessage(addr, deviceIds, recurse, {});
-        }
-
         async _handleIdentityKeyError(e, options) {
             options = options || {};
             if (!(e instanceof libsignal.UntrustedIdentityKeyError)) {
@@ -146,9 +141,9 @@
             }
         }
 
-        async transmitMessage(addr, jsonData, timestamp) {
+        async transmitMessage(addr, messages, timestamp) {
             try {
-                return await this.signal.sendMessages(addr, jsonData, timestamp);
+                return await this.signal.sendMessages(addr, messages, timestamp);
             } catch(e) {
                 if (e instanceof ns.ProtocolError && e.code === 404) {
                     throw new ns.UnregisteredUserError(addr, e);
@@ -166,21 +161,27 @@
             return messagePartCount * 160;
         }
 
-        async doSendMessage(addr, deviceIds, recurse) {
-            const ciphers = {};
-            const plaintext = this.message.toArrayBuffer();
-            const paddedtext = new Uint8Array(this.getPaddedMessageLength(plaintext.byteLength + 1) - 1);
-            paddedtext.set(new Uint8Array(plaintext));
-            paddedtext[plaintext.byteLength] = 0x80;
+        getPaddedMessageBuffer() {
+            const messageBuffer = this.message.toArrayBuffer();
+            const paddedBytes = new Uint8Array(this.getPaddedMessageLength(messageBuffer.byteLength + 1) - 1);
+            paddedBytes.set(new Uint8Array(messageBuffer));
+            paddedBytes[messageBuffer.byteLength] = 0x80;
+            return paddedBytes.buffer;
+        }
+
+        async _sendToAddr(addr, recurse) {
+            const deviceIds = await ns.store.getDeviceIds(addr);
+            const paddedMessage = this.getPaddedMessageBuffer();
             let messages;
             let attempts = 0;
+            const ciphers = {};
             do {
                 try {
                     messages = await Promise.all(deviceIds.map(async id => {
                         const address = new libsignal.ProtocolAddress(addr, id);
                         const sessionCipher = new libsignal.SessionCipher(ns.store, address);
                         ciphers[address.deviceId] = sessionCipher;
-                        return this.toJSON(address, await sessionCipher.encrypt(paddedtext.buffer));
+                        return this.toJSON(address, await sessionCipher.encrypt(paddedMessage));
                     }));
                 } catch(e) {
                     if (e instanceof libsignal.UntrustedIdentityKeyError) {
@@ -219,20 +220,61 @@
             this.emitSent(addr);
         }
 
-        toJSON(address, encryptedMsg) {
+        async _sendToDevice(addr, deviceId, recurse) {
+            const protoAddr = new libsignal.ProtocolAddress(addr, deviceId);
+            const sessionCipher = new libsignal.SessionCipher(ns.store, protoAddr);
+            if (!(await sessionCipher.hasOpenSession())) {
+                await this.getKeysForAddr(addr, [deviceId]);
+            }
+            let encryptedMessage;
+            let attempts = 0;
+            do {
+                try {
+                    encryptedMessage = await sessionCipher.encrypt(this.getPaddedMessageBuffer());
+                } catch(e) {
+                    if (e instanceof libsignal.UntrustedIdentityKeyError) {
+                        await this._handleIdentityKeyError(e, {forceThrow: !!attempts});
+                    } else {
+                        this.emitError(addr, "Failed to create message", e);
+                        return;
+                    }
+                }
+            } while(!encryptedMessage && !attempts++);
+            const messageBundle = this.toJSON(protoAddr, encryptedMessage, this.timestamp);
+            try {
+                await this.signal.sendMessage(addr, deviceId, messageBundle);
+            } catch(e) {
+                if (e instanceof ns.ProtocolError && e.code === 410) {
+                    sessionCipher.closeOpenSession();  // Force getKeysForAddr on next call.
+                    await this._sendToDevice(addr, /*recurse*/ false);
+                } else if (e.code === 401 || e.code === 403) {
+                    throw e;
+                } else {
+                    this.emitError(addr, "Failed to send message", e);
+                    return;
+                }
+            }
+            this.emitSent(addr);
+        }
+
+        toJSON(address, encryptedMsg, timestamp) {
             return {
                 type: encryptedMsg.type,
                 destinationDeviceId: address.deviceId,
                 destinationRegistrationId: encryptedMsg.registrationId,
-                content: btoa(encryptedMsg.body)
+                content: btoa(encryptedMsg.body),
+                timestamp
             };
         }
 
-        async reopenClosedSessions(addr) {
+        async initSessions(encodedAddr) {
             // Scan the address for devices that have closed sessions and fetch
             // new key material for said devices so we can encrypt messages for
             // them.
-            const deviceIds = await ns.store.getDeviceIds(addr);
+            const addrTuple = ns.util.unencodeAddr(encodedAddr);
+            const addr = addrTuple[0];
+            const deviceId = addrTuple[1];
+            const deviceIds = deviceId ? [deviceId] : await ns.store.getDeviceIds(addr);
             if (!deviceIds.length) {
                 return;
             }
@@ -241,11 +283,9 @@
                 const sessionCipher = new libsignal.SessionCipher(ns.store, address);
                 return !(await sessionCipher.hasOpenSession()) ? id : null;
             }))).filter(x => x !== null);
-            if (stale.length === deviceIds.length) {
-                console.debug("Reopening ALL sessions for:", addr);
+            if (stale.length === deviceIds.length && !deviceId) {
                 await this.getKeysForAddr(addr);  // Get them all at once.
             } else if (stale.length) {
-                console.debug(`Reopening ${stale.length} sessions for:`, addr);
                 await this.getKeysForAddr(addr, stale);
             }
         }
@@ -261,15 +301,22 @@
             }
         }
 
-        async sendToAddr(addr) {
+        async sendToAddr(encodedAddr) {
             try {
-                await this.reopenClosedSessions(addr);
+                await this.initSessions(encodedAddr);
             } catch(e) {
-                this.emitError(addr, "Failed to reopen sessions for: " + addr, e);
+                this.emitError(addr, "Failed to init sessions for: " + encodedAddr, e);
                 throw e;
             }
+            const addrTuple = ns.util.unencodeAddr(encodedAddr);
+            const addr = addrTuple[0];
+            const deviceId = addrTuple[1];
             try {
-                await this._sendToAddr(addr, /*recurse*/ true);
+                if (deviceId) {
+                    await this._sendToDevice(addr, deviceId, /*recurse*/ true);
+                } else {
+                    await this._sendToAddr(addr, /*recurse*/ true);
+                }
             } catch(e) {
                 this.emitError(addr, "Failed to send to address " + addr, e);
                 throw e;

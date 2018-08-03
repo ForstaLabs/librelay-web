@@ -55,7 +55,14 @@
     };
 
     ns.unencodeAddr = function(addr) {
-        return addr.split(".");
+        const tuple = addr.split(".");
+        if (tuple.length > 2) {
+            throw new TypeError("Invalid address format");
+        }
+        if (tuple[1]) {
+            tuple[1] = parseInt(tuple[1]);
+        }
+        return tuple;
     };
 
     ns.jsonThing = function(thing) {

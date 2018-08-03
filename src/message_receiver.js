@@ -10,6 +10,7 @@
         constructor(signal, addr, deviceId, signalingKey, noWebSocket) {
             super();
             console.assert(signal && addr && deviceId && signalingKey);
+            this._sender = new ns.MessageSender(signal, addr);
             this.signal = signal;
             this.addr = addr;
             this.deviceId = deviceId;
@@ -232,9 +233,10 @@
                         await this.handleEnvelope(envelope, /*reentrant*/ true);
                     }
                 } else if (e instanceof libsignal.SessionError) {
-                    debugger;
-                } else if (e instanceof libsignal.PreKeyError) {
-                    debugger;
+                    const fqAddr = `${envelope.source}.${envelope.sourceDevice}`;
+                    console.error(`Session error for: ${fqAddr}`, e);
+                    console.warn("Attempting session reset/retransmit for:", envelope.timestamp);
+                    await this._sender.closeSession(fqAddr, {retransmit: envelope.timestamp});
                 } else {
                     const ev = new Event('error');
                     ev.error = e;
