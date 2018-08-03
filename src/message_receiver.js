@@ -273,14 +273,7 @@
             if (envelope.type === envTypes.CIPHERTEXT) {
                 plainBuf = await sessionCipher.decryptWhisperMessage(cipherBuf);
             } else if (envelope.type === envTypes.PREKEY_BUNDLE) {
-                try {
-                    plainBuf = await sessionCipher.decryptPreKeyWhisperMessage(cipherBuf);
-                } catch(e) {
-                    if (e.message === 'Unknown identity key') {
-                        throw new ns.IncomingIdentityKeyError(addr.toString(), cipherBuf, e.identityKey);
-                    }
-                    throw e;
-                }
+                plainBuf = await sessionCipher.decryptPreKeyWhisperMessage(cipherBuf);
             } else {
                 throw new TypeError("Unknown message type:" + envelope.type);
             }

@@ -57,10 +57,6 @@
         }
 
         async emitError(addr, reason, error) {
-            if (!error || error instanceof ns.ProtocolError && error.code !== 404) {
-                error = new ns.OutgoingMessageError(addr, this.message.toArrayBuffer(),
-                                                    this.timestamp, error);
-            }
             error.addr = addr;
             error.reason = reason;
             const entry = {
@@ -90,15 +86,11 @@
             if (!(e instanceof libsignal.UntrustedIdentityKeyError)) {
                 throw new TypeError("UntrustedIdentityKeyError required");
             }
-            const keyError = new ns.OutgoingIdentityKeyError(e.addr, this.message.toArrayBuffer(),
-                                                             this.timestamp, e.identityKey);
-            keyError.stack = e.stack;
-            keyError.message = e.message;
             if (!options.forceThrow) {
-                await this.emit('keychange', keyError);
+                await this.emit('keychange', e);
             }
-            if (!keyError.accepted) {
-                throw keyError;
+            if (!e.accepted) {
+                throw e;
             }
         }
 
@@ -112,7 +104,7 @@
                         console.debug("Skipping prekey processing for self");
                         return;
                     }
-                    device.identityKey = response.identityKey; // XXX used anymore?
+                    device.identityKey = response.identityKey;
                     const address = new libsignal.ProtocolAddress(addr, device.deviceId);
                     const builder = new libsignal.SessionBuilder(ns.store, address);
                     try {
@@ -158,14 +150,8 @@
             try {
                 return await this.signal.sendMessages(addr, jsonData, timestamp);
             } catch(e) {
-                if (e instanceof ns.ProtocolError && (e.code !== 409 && e.code !== 410)) {
-                    // 409 and 410 should bubble and be handled by doSendMessage
-                    // 404 should throw UnregisteredUserError
-                    // all other network errors can be retried later.
-                    if (e.code === 404) {
-                        throw new ns.UnregisteredUserError(addr, e);
-                    }
-                    throw new ns.SendMessageError(addr, jsonData, e, timestamp);
+                if (e instanceof ns.ProtocolError && e.code === 404) {
+                    throw new ns.UnregisteredUserError(addr, e);
                 }
                 throw e;
             }

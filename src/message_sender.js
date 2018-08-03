@@ -58,9 +58,6 @@
             console.assert(signal && addr);
             this.signal = signal;
             this.addr = addr;
-            ns.replay.registerFunction(this.tryMessageAgain.bind(this), ns.replay.Type.ENCRYPT_MESSAGE);
-            ns.replay.registerFunction(this.retransmitMessage.bind(this), ns.replay.Type.TRANSMIT_MESSAGE);
-            ns.replay.registerFunction(this.send.bind(this), ns.replay.Type.REBUILD_MESSAGE);
         }
 
         async makeAttachmentPointer(attachment) {
@@ -103,15 +100,7 @@
                 return;
             }
             const upload_jobs = attachments.map(x => this.makeAttachmentPointer(x));
-            try {
-                message.attachmentPointers = await Promise.all(upload_jobs);
-            } catch(e) {
-                if (e instanceof ns.ProtocolError) {
-                    throw new ns.MessageError(message, e);
-                } else {
-                    throw e;
-                }
-            }
+            message.attachmentPointers = await Promise.all(upload_jobs);
         }
 
         async send(attrs) {

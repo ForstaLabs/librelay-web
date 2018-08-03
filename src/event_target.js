@@ -1,5 +1,7 @@
+// vim: ts=4:sw=4:expandtab
+/* global libsignal */
+ 
 /*
- * vim: ts=4:sw=4:expandtab
  *
  * Implements EventTarget (with async support)
  * https://developer.mozilla.org/en-US/docs/Web/API/EventTarget
@@ -15,6 +17,9 @@
 
         constructor(keyError, envelope) {
             this.type = 'keychange';
+            if (!(keyError instanceof libsignal.UntrustedIdentityKeyError)) {
+                throw TypeError("UntrustedIdentityKeyError required");
+            }
             this.keyError = keyError;
             this.envelope = envelope;
         }
