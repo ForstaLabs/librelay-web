@@ -134,20 +134,6 @@
         }
     }
 
-    class SessionError extends RelayError {
-        constructor(message) {
-            super(message);
-            this.name = 'SessionError';
-        }
-    }
-
-    class PreKeyError extends SessionError {
-        constructor(message) {
-            super(message);
-            this.name = 'PreKeyError';
-        }
-    }
-
     ns.UnregisteredUserError = UnregisteredUserError;
     ns.IncomingIdentityKeyError = IncomingIdentityKeyError;
     ns.OutgoingIdentityKeyError = OutgoingIdentityKeyError;
@@ -158,6 +144,4 @@
     ns.SendMessageError = SendMessageError;
     ns.ProtocolError = ProtocolError;
     ns.NetworkError = NetworkError;
-    ns.SessionError = SessionError;
-    ns.PreKeyError = PreKeyError;
 })();

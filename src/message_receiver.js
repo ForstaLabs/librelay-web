@@ -217,10 +217,10 @@
             try {
                 await handler.call(this, envelope);
             } catch(e) {
-                if (e.name === 'MessageCounterError') {
-                    console.warn("Ignoring MessageCounterError for:", envelope);
+                if (e instanceof libsignal.MessageCounterError) {
+                    console.warn("Ignoring duplicate message:", envelope);
                     return;
-                } else if (e instanceof ns.IncomingIdentityKeyError && !reentrant) {
+                } else if (e instanceof libsignal.UntrustedIdentityKeyError && !reentrant) {
                     const keyChangeEvent = new ns.KeyChangeEvent(e, envelope);
                     if (forceAcceptKeyChange) {
                         await keyChangeEvent.accept();
@@ -231,14 +231,15 @@
                         envelope.keyChange = true;
                         await this.handleEnvelope(envelope, /*reentrant*/ true);
                     }
-                } else if (e instanceof ns.RelayError) {
-                    console.warn("Supressing RelayError:", e);
+                } else if (e instanceof libsignal.SessionError) {
+                    debugger;
+                } else if (e instanceof libsignal.PreKeyError) {
+                    debugger;
                 } else {
                     const ev = new Event('error');
                     ev.error = e;
                     ev.proto = envelope;
                     await this.dispatchEvent(ev);
-                    throw e;
                 }
             }
         }
@@ -249,24 +250,22 @@
             await this.dispatchEvent(ev);
         }
 
-        unpad(paddedPlaintext) {
-            paddedPlaintext = new Uint8Array(paddedPlaintext);
-            let plaintext;
-            for (let i = paddedPlaintext.length - 1; i; i--) {
-                if (paddedPlaintext[i] == 0x80) {
-                    plaintext = new Uint8Array(i);
-                    plaintext.set(paddedPlaintext.subarray(0, i));
-                    plaintext = plaintext.buffer;
-                    break;
-                } else if (paddedPlaintext[i] !== 0x00) {
+        unpad(paddedBuffer) {
+            const paddedBytes = new Uint8Array(paddedBuffer);
+            for (let i = paddedBytes.length - 1; i; i--) {
+                if (paddedBytes[i] === 0x00) {
+                    continue;  // pad char
+                } else if (paddedBytes[i] === 0x80) {
+                    return paddedBuffer.slice(0, i);
+                } else {
                     throw new Error('Invalid padding');
                 }
             }
-            return plaintext;
+            throw new Error("Invalid buffer");
         }
 
         async decrypt(envelope, ciphertext) {
-            const addr = new libsignal.SignalProtocolAddress(envelope.source, envelope.sourceDevice);
+            const addr = new libsignal.ProtocolAddress(envelope.source, envelope.sourceDevice);
             const sessionCipher = new libsignal.SessionCipher(ns.store, addr);
             const envTypes = ns.protobuf.Envelope.Type;
             const cipherBuf = ciphertext.toArrayBuffer();
@@ -402,10 +401,10 @@
         async handleEndSession(addr, deviceId) {
             const deviceIds = deviceId == null ? (await ns.store.getDeviceIds(addr)) : [deviceId];
             await Promise.all(deviceIds.map(id => {
-                const address = new libsignal.SignalProtocolAddress(addr, id);
+                const address = new libsignal.ProtocolAddress(addr, id);
                 const sessionCipher = new libsignal.SessionCipher(ns.store, address);
-                console.warn(`Deleting sessions for: ${address}`);
-                return sessionCipher.deleteAllSessionsForDevice();
+                console.warn(`Closing open session for: ${address}`);
+                return sessionCipher.closeOpenSession();
             }));
         }
 

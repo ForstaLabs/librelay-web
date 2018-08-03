@@ -85,13 +85,16 @@
             return await this.doSendMessage(addr, deviceIds, recurse, {});
         }
 
-        async _handleIdentityKeyError(e, addr, identityKey, forceThrow) {
-            console.assert(e.message === "Identity key changed");
-            const keyError = new ns.OutgoingIdentityKeyError(addr, this.message.toArrayBuffer(),
-                                                             this.timestamp, identityKey);
+        async _handleIdentityKeyError(e, options) {
+            options = options || {};
+            if (!(e instanceof libsignal.UntrustedIdentityKeyError)) {
+                throw new TypeError("UntrustedIdentityKeyError required");
+            }
+            const keyError = new ns.OutgoingIdentityKeyError(e.addr, this.message.toArrayBuffer(),
+                                                             this.timestamp, e.identityKey);
             keyError.stack = e.stack;
             keyError.message = e.message;
-            if (!forceThrow) {
+            if (!options.forceThrow) {
                 await this.emit('keychange', keyError);
             }
             if (!keyError.accepted) {
@@ -109,15 +112,14 @@
                         console.debug("Skipping prekey processing for self");
                         return;
                     }
-                    device.identityKey = response.identityKey;
-                    const address = new libsignal.SignalProtocolAddress(addr, device.deviceId);
+                    device.identityKey = response.identityKey; // XXX used anymore?
+                    const address = new libsignal.ProtocolAddress(addr, device.deviceId);
                     const builder = new libsignal.SessionBuilder(ns.store, address);
                     try {
-                        await builder.processPreKey(device);  // Stores the session/deviceId.
+                        await builder.initOutgoing(device);
                     } catch(e) {
-                        if (e.message === "Identity key changed") {
-                            await _this._handleIdentityKeyError(e, addr, device.identityKey,
-                                                                /*forceThrow*/ reentrant);
+                        if (e instanceof libsignal.UntrustedIdentityKeyError) {
+                            await _this._handleIdentityKeyError(e, {forceThrow: reentrant});
                             await _this.getKeysForAddr(addr, updateDevices, /*reentrant*/ true);
                         } else {
                             throw e;
@@ -189,17 +191,14 @@
             do {
                 try {
                     messages = await Promise.all(deviceIds.map(async id => {
-                        const address = new libsignal.SignalProtocolAddress(addr, id);
+                        const address = new libsignal.ProtocolAddress(addr, id);
                         const sessionCipher = new libsignal.SessionCipher(ns.store, address);
-                        ciphers[address.getDeviceId()] = sessionCipher;
+                        ciphers[address.deviceId] = sessionCipher;
                         return this.toJSON(address, await sessionCipher.encrypt(paddedtext.buffer));
                     }));
                 } catch(e) {
-                    if (e.message === "Identity key changed") {
-                        // XXX: A little suspect, using the session's key would be better (but it's private)
-                        const identity = await ns.store.loadIdentity(addr);
-                        await this._handleIdentityKeyError(e, addr, identity.get('publicKey'),
-                                                           /*forceThrow*/ !!attempts);
+                    if (e instanceof libsignal.UntrustedIdentityKeyError) {
+                        await this._handleIdentityKeyError(e, {forceThrow: !!attempts});
                     } else {
                         this.emitError(addr, "Failed to create message", e);
                         return;
@@ -217,8 +216,7 @@
                     if (e.code === 409) {
                         await this.removeDeviceIdsForAddr(addr, e.response.extraDevices);
                     } else {
-                        await Promise.all(e.response.staleDevices.map(x =>
-                            ciphers[x].closeOpenSessionForDevice()));
+                        await Promise.all(e.response.staleDevices.map(x => ciphers[x].closeOpenSession()));
                     }
                     const resetDevices = e.code === 410 ? e.response.staleDevices : e.response.missingDevices;
                     // Optimize first-contact key lookup (just get them all at once).
@@ -238,7 +236,7 @@
         toJSON(address, encryptedMsg) {
             return {
                 type: encryptedMsg.type,
-                destinationDeviceId: address.getDeviceId(),
+                destinationDeviceId: address.deviceId,
                 destinationRegistrationId: encryptedMsg.registrationId,
                 content: btoa(encryptedMsg.body)
             };
@@ -253,7 +251,7 @@
                 return;
             }
             const stale = (await Promise.all(deviceIds.map(async id => {
-                const address = new libsignal.SignalProtocolAddress(addr, id);
+                const address = new libsignal.ProtocolAddress(addr, id);
                 const sessionCipher = new libsignal.SessionCipher(ns.store, address);
                 return !(await sessionCipher.hasOpenSession()) ? id : null;
             }))).filter(x => x !== null);
