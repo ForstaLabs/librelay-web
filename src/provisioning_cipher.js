@@ -45,7 +45,6 @@
             crypto.getRandomValues(iv);
             const encryptedMsg = await libsignal.crypto.encrypt(keys[0], message.toArrayBuffer(), iv);
             const msgLen = encryptedMsg.byteLength;
-
             const data = new Uint8Array(1 + ivLen + msgLen);
             data[0] = 1;  // Version
             data.set(iv, 1);

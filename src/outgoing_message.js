@@ -153,8 +153,8 @@
         }
 
         getPaddedMessageLength(messageLength) {
-            var messageLengthWithTerminator = messageLength + 1;
-            var messagePartCount = Math.floor(messageLengthWithTerminator / 160);
+            const messageLengthWithTerminator = messageLength + 1;
+            let messagePartCount = Math.floor(messageLengthWithTerminator / 160);
             if (messageLengthWithTerminator % 160 !== 0) {
                 messagePartCount++;
             }

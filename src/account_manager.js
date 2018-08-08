@@ -159,20 +159,18 @@
             }
             const count = this.preKeyHighWater;
             const startId = await ns.store.getState('maxPreKeyId', 1);
-            const signedKeyId = await ns.store.getState('signedKeyId', 1);
             if (typeof startId !== 'number') {
                 throw new TypeError('Invalid maxPreKeyId');
             }
+            const signedKeyId = await ns.store.getState('signedKeyId', 1);
             if (typeof signedKeyId !== 'number') {
                 throw new TypeError('Invalid signedKeyId');
             }
-
             const ourIdent = await ns.store.getOurIdentity();
             const result = {
                 preKeys: [],
                 identityKey: ourIdent.pubKey
             };
-
             for (let keyId = startId; keyId < startId + count; ++keyId) {
                 const preKey = libsignal.keyhelper.generatePreKey(keyId);
                 await ns.store.storePreKey(preKey.keyId, preKey.keyPair);
@@ -184,7 +182,6 @@
                     await progressCallback(keyId - startId, (keyId - startId) / count);
                 }
             }
-
             const sprekey = libsignal.keyhelper.generateSignedPreKey(ourIdent, signedKeyId);
             await ns.store.storeSignedPreKey(sprekey.keyId, sprekey.keyPair);
             result.signedPreKey = {
@@ -192,7 +189,6 @@
                 publicKey: sprekey.keyPair.pubKey,
                 signature: sprekey.signature
             };
-
             await ns.store.removeSignedPreKey(signedKeyId - 2);
             await ns.store.putStateDict({
                 maxPreKeyId: startId + count,

@@ -263,21 +263,20 @@
             return res;
         },
 
-        sendMessages: function(destination, messageArray, timestamp) {
-            const json = {
-                messages: messageArray,
-                timestamp: timestamp
-            };
-            return this.request({
+        sendMessages: async function(destination, messages, timestamp) {
+            return await this.request({
                 call: 'messages',
                 httpType: 'PUT',
                 urlParameters: '/' + destination,
-                json
+                json: {
+                    messages,
+                    timestamp
+                }
             });
         },
 
-        sendMessage: function(addr, deviceId, message) {
-            return this.request({
+        sendMessage: async function(addr, deviceId, message) {
+            return await this.request({
                 call: 'messages',
                 httpType: 'PUT',
                 urlParameters: `/${addr}/${deviceId}`,
