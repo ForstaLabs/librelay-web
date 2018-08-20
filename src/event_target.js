@@ -48,7 +48,7 @@
         }
 
         isStopped() {
-            this._stopped === true;
+            return this._stopped === true;
         }
     }
 
