@@ -31,6 +31,28 @@
         }
     }
 
+
+    class ClosingSessionEvent {
+
+        constructor(sessionError, envelope) {
+            this.type = 'closingsession';
+            if (!(sessionError instanceof libsignal.SessionError)) {
+                throw TypeError("SessionError required");
+            }
+            this.sessionError = sessionError;
+            this.envelope = envelope;
+        }
+
+        stop() {
+            this._stopped = true;
+        }
+
+        isStopped() {
+            this._stopped === true;
+        }
+    }
+
+
     class EventTarget {
 
         async dispatchEvent(ev) {
@@ -81,5 +103,6 @@
     }
 
     ns.KeyChangeEvent = KeyChangeEvent;
+    ns.ClosingSessionEvent = ClosingSessionEvent;
     ns.EventTarget = EventTarget;
 }());

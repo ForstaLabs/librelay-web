@@ -218,10 +218,7 @@
             try {
                 await handler.call(this, envelope);
             } catch(e) {
-                if (e instanceof libsignal.MessageCounterError) {
-                    console.warn("Ignoring duplicate message:", envelope);
-                    return;
-                } else if (e instanceof libsignal.UntrustedIdentityKeyError && !reentrant) {
+                if (e instanceof libsignal.UntrustedIdentityKeyError && !reentrant) {
                     const keyChangeEvent = new ns.KeyChangeEvent(e, envelope);
                     if (forceAcceptKeyChange) {
                         await keyChangeEvent.accept();
@@ -232,7 +229,6 @@
                         envelope.keyChange = true;
                         await this.handleEnvelope(envelope, /*reentrant*/ true);
                     }
-                    return;
                 } else if (e instanceof libsignal.SessionError) {
                     const fqAddr = `${envelope.source}.${envelope.sourceDevice}`;
                     console.error(`Session error for ${fqAddr}:`, e);
@@ -241,13 +237,18 @@
                         const keys = await (new ns.AccountManager(this.signal)).generateKeys();
                         await this.signal.registerKeys(keys);
                     }
-                    console.warn("Attempting session reset/retransmit for:", envelope.timestamp);
-                    await this._sender.closeSession(fqAddr, {retransmit: envelope.timestamp});
+                    const ev = new ns.ClosingSessionEvent(e, envelope);
+                    await this.dispatchEvent(ev);
+                    if (!ev.isStopped()) {
+                        console.warn("Attempting session reset/retransmit for:", envelope.timestamp);
+                        await this._sender.closeSession(fqAddr, {retransmit: envelope.timestamp});
+                    }
+                } else {
+                    const ev = new Event('error');
+                    ev.error = e;
+                    ev.proto = envelope;
+                    await this.dispatchEvent(ev);
                 }
-                const ev = new Event('error');
-                ev.error = e;
-                ev.proto = envelope;
-                await this.dispatchEvent(ev);
             }
         }
 
