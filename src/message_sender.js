@@ -95,12 +95,17 @@
             const msg = new Message(attrs);
             await this.uploadAttachments(msg);
             const msgProto = msg.toProto();
+            const outMsg = this._send(msgProto, attrs.timestamp, this.scrubSelf(attrs.addrs));
             if (includeSelf) {
                 const expirationStart = attrs.expiration && Date.now();
-                await this._sendSync(msgProto, attrs.timestamp, attrs.threadId,
-                                     expirationStart);
+                const syncOutMsg = await this._sendSync(msgProto, attrs.timestamp, attrs.threadId,
+                                                        expirationStart);
+                // Relay events from out message into the normal (non-sync) out-msg.  Even
+                // if this message is just for us, it makes the interface consistent.
+                syncOutMsg.on('sent', ev => outMsg.emit('sent', ev));
+                syncOutMsg.on('error', ev => outMsg.emit('error', ev));
             }
-            return this._send(msgProto, attrs.timestamp, this.scrubSelf(attrs.addrs));
+            return outMsg;
         }
 
         _send(msgproto, timestamp, addrs) {
