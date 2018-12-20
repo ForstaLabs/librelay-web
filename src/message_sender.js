@@ -98,8 +98,8 @@
             const outMsg = this._send(msgProto, attrs.timestamp, this.scrubSelf(attrs.addrs));
             if (includeSelf) {
                 const expirationStart = attrs.expiration && Date.now();
-                const syncOutMsg = await this._sendSync(msgProto, attrs.timestamp, attrs.threadId,
-                                                        expirationStart);
+                const syncOutMsg = this._sendSync(msgProto, attrs.timestamp, attrs.threadId,
+                                                  expirationStart);
                 // Relay events from out message into the normal (non-sync) out-msg.  Even
                 // if this message is just for us, it makes the interface consistent.
                 syncOutMsg.on('sent', ev => outMsg.emit('sent', ev));
@@ -129,7 +129,7 @@
             await this.dispatchEvent(new ns.KeyChangeEvent(e));
         }
 
-        async _sendSync(content, timestamp, threadId, expirationStartTimestamp) {
+        _sendSync(content, timestamp, threadId, expirationStartTimestamp) {
             if (!(content instanceof ns.protobuf.Content)) {
                 throw new TypeError("Expected Content protobuf");
             }
