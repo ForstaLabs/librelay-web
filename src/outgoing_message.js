@@ -41,7 +41,7 @@
             handlers.push(callback);
         }
 
-        async emit(event) {
+        async _emit(event) {
             const handlers = this._listeners[event];
             if (!handlers) {
                 return;
@@ -56,24 +56,30 @@
             }
         }
 
-        async emitError(addr, reason, error) {
+        async _emitError(addr, reason, error) {
             error.addr = addr;
             error.reason = reason;
-            const entry = {
+            await this._emitErrorEntry({
                 timestamp: Date.now(),
                 error
-            };
-            this.errors.push(entry);
-            await this.emit('error', entry);
+            });
         }
 
-        async emitSent(addr) {
-            const entry = {
+        async _emitErrorEntry(entry) {
+            this.errors.push(entry);
+            await this._emit('error', entry);
+        }
+
+        async _emitSent(addr) {
+            await this._emitSentEntry({
                 timestamp: Date.now(),
                 addr
-            };
+            });
+        }
+
+        async _emitSentEntry(entry) {
             this.sent.push(entry);
-            await this.emit('sent', entry);
+            await this._emit('sent', entry);
         }
 
         async _handleIdentityKeyError(e, options) {
@@ -82,7 +88,7 @@
                 throw new TypeError("UntrustedIdentityKeyError required");
             }
             if (!options.forceThrow) {
-                await this.emit('keychange', e);
+                await this._emit('keychange', e);
             }
             if (!e.accepted) {
                 throw e;
@@ -187,7 +193,7 @@
                     if (e instanceof libsignal.UntrustedIdentityKeyError) {
                         await this._handleIdentityKeyError(e, {forceThrow: !!attempts});
                     } else {
-                        this.emitError(addr, "Failed to create message", e);
+                        this._emitError(addr, "Failed to create message", e);
                         return;
                     }
                 }
@@ -197,7 +203,7 @@
             } catch(e) {
                 if (e instanceof ns.ProtocolError && (e.code === 410 || e.code === 409)) {
                     if (!recurse) {
-                        this.emitError(addr, "Hit retry limit attempting to reload device list", e);
+                        this._emitError(addr, "Hit retry limit attempting to reload device list", e);
                         return;
                     }
                     if (e.code === 409) {
@@ -213,11 +219,11 @@
                 } else if (e.code === 401 || e.code === 403) {
                     throw e;
                 } else {
-                    this.emitError(addr, "Failed to send message", e);
+                    this._emitError(addr, "Failed to send message", e);
                     return;
                 }
             }
-            this.emitSent(addr);
+            this._emitSent(addr);
         }
 
         async _sendToDevice(addr, deviceId, recurse) {
@@ -235,7 +241,7 @@
                     if (e instanceof libsignal.UntrustedIdentityKeyError) {
                         await this._handleIdentityKeyError(e, {forceThrow: !!attempts});
                     } else {
-                        this.emitError(addr, "Failed to create message", e);
+                        this._emitError(addr, "Failed to create message", e);
                         return;
                     }
                 }
@@ -250,11 +256,11 @@
                 } else if (e.code === 401 || e.code === 403) {
                     throw e;
                 } else {
-                    this.emitError(addr, "Failed to send message", e);
+                    this._emitError(addr, "Failed to send message", e);
                     return;
                 }
             }
-            this.emitSent(addr);
+            this._emitSent(addr);
         }
 
         toJSON(address, encryptedMsg, timestamp) {
@@ -305,7 +311,7 @@
             try {
                 await this.initSessions(encodedAddr);
             } catch(e) {
-                this.emitError(encodedAddr, "Failed to init sessions for: " + encodedAddr, e);
+                this._emitError(encodedAddr, "Failed to init sessions for: " + encodedAddr, e);
                 throw e;
             }
             const addrTuple = ns.util.unencodeAddr(encodedAddr);
@@ -318,7 +324,7 @@
                     await this._sendToAddr(addr, /*recurse*/ true);
                 }
             } catch(e) {
-                this.emitError(encodedAddr, "Failed to send to address " + encodedAddr, e);
+                this._emitError(encodedAddr, "Failed to send to address " + encodedAddr, e);
                 throw e;
             }
         }
