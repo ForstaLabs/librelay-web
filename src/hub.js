@@ -424,6 +424,9 @@
         }
         const url = [ns.getAtlasUrl(), urn.replace(/^\//, '')].join('/');
         const resp = await fetch(url, options);
+        if (options.rawResponse) {
+            return resp;
+        }
         let respType;
         let respContent;
         if ((resp.headers.get('content-type') || '').startsWith('application/json')) {
