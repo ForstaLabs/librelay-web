@@ -252,7 +252,7 @@
             } catch(e) {
                 if (e instanceof ns.ProtocolError && e.code === 410) {
                     sessionCipher.closeOpenSession();  // Force getKeysForAddr on next call.
-                    await this._sendToDevice(addr, /*recurse*/ false);
+                    await this._sendToDevice(addr, deviceId, /*recurse*/ false);
                 } else if (e.code === 401 || e.code === 403) {
                     throw e;
                 } else {
