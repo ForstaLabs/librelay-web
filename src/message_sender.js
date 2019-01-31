@@ -113,7 +113,7 @@
             const outmsg = new ns.OutgoingMessage(this.signal, timestamp, msgproto);
             outmsg.on('keychange', this.onKeyChange.bind(this));
             for (const addr of addrs) {
-                ns.queueAsync('message-send-job-' + addr, () =>
+                ns.queueAsync('message-send-job-' + addr.split('.')[0], () =>
                     outmsg.sendToAddr(addr).catch(this.onError.bind(this)));
             }
             return outmsg;
