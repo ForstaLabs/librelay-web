@@ -38,16 +38,14 @@
                 return;  // Do not perturb existing idle promise.
             }
             this.busy = true;
-            console.debug("Message Receiver Busy");
             this.idle = new Promise(resolve => {
                 this.setIdle = () => {
                     clearTimeout(this._idleTimeout);
                     this._idleTimeout = setTimeout(() => {
                         this.busy = false;
                         this._idleTimeout = undefined;
-                        console.debug("Message Receiver Idle");
                         resolve();
-                    }, 1000);
+                    }, 2000);
                 };
             });
         }
