@@ -182,7 +182,7 @@
                     threadId: 'deadbeef-1111-2222-3333-000000000000', // Avoid breaking clients while prototyping
                     data: {
                         control: 'closeSession',
-                        retransmit: options.retransmit
+                        retransmits: options.retransmits
                     }
                 }]
             });

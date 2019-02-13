@@ -229,17 +229,17 @@
                     }
                 } else if (e instanceof libsignal.SessionError) {
                     const fqAddr = `${envelope.source}.${envelope.sourceDevice}`;
-                    console.error(`Session error for ${fqAddr}:`, e);
-                    if (e instanceof libsignal.PreKeyError) {
+                    console.warn(`Session error for ${fqAddr}:`, e);
+                    /*if (e instanceof libsignal.PreKeyError) {
                         console.warn("Refreshing prekeys...");
                         const keys = await (new ns.AccountManager(this.signal)).generateKeys();
                         await this.signal.registerKeys(keys);
-                    }
+                    }*/
                     const ev = new ns.ClosingSessionEvent(e, envelope);
                     await this.dispatchEvent(ev);
                     if (!ev.isStopped()) {
-                        console.warn("Attempting session reset/retransmit for:", envelope.timestamp);
-                        await this._sender.closeSession(fqAddr, {retransmit: envelope.timestamp});
+                        console.warn("Scheduling session reset/retransmit for:", envelope.timestamp);
+                        this.schedRetransmit(fqAddr, envelope.timestamp);
                     }
                 } else {
                     const ev = new Event('error');
@@ -247,6 +247,37 @@
                     ev.proto = envelope;
                     await this.dispatchEvent(ev);
                 }
+            }
+        }
+
+        async schedRetransmit(addr, retransmit) {
+            if (this._retransmitQueues) {
+                if (!this._retransmitQueues.has(addr)) {
+                    this._retransmitQueues.set(addr, [retransmit]);
+                } else {
+                    this._retransmitQueues.get(addr).push(retransmit);
+                }
+                return;
+            }
+            this._retransmitQueues = new Map();
+            this._retransmitQueues.set(addr, [retransmit]);
+            await this.idle;
+
+            // Often retransmits are the fault of prekey/signedprekey sync problems. Ensure our prekey
+            // situation is good..
+            const am = new ns.AccountManager(this.signal);
+            await am.refreshPreKeys();
+            try {
+                while (this._retransmitQueues.size) {
+                    for (const [addr, retransmits] of Array.from(this._retransmitQueues.entries())) {
+                        this._retransmitQueues.delete(addr);
+                        console.warn(`Sending close-session and retransmit request to ${addr} for`,
+                                     retransmits.join());
+                        await this._sender.closeSession(addr, {retransmits});
+                    }
+                }
+            } finally {
+                this._retransmitQueues = null;
             }
         }
 

@@ -123,7 +123,11 @@
 
         async refreshPreKeys() {
             const preKeyCount = await this.signal.getMyKeys();
-            if (preKeyCount <= this.preKeyLowWater) {
+            const preKeys = (await ns.store.getPreKeys()).filter(x => !x.get('removed'));
+            const signedPreKeys = await ns.store.getSignedPreKeys();
+            if (preKeyCount <= this.preKeyLowWater ||
+                preKeys.length < preKeyCount ||
+                !signedPreKeys.length) {
                 // The server replaces existing keys so just go to the hilt.
                 console.info("Refreshing pre-keys...");
                 const keys = await this.generateKeys();
