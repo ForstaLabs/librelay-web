@@ -58,7 +58,7 @@
         this.url = url;
         this.username = username;
         this.password = password;
-        this.attachment_id_regex = RegExp("^https://.*/(\\d+)?");
+        this.attachment_id_regex = RegExp("^https?://.*/(\\d+)?");
     };
 
     ns.SignalServer.prototype = {
