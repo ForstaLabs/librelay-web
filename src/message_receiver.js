@@ -129,10 +129,8 @@
                         if (msg.message) {
                             msg.legacyMessage = dcodeIO.ByteBuffer.fromBase64(msg.message);
                         }
-                        delete msg.message;
                         const envelope = new ns.protobuf.Envelope();
                         envelope.set(msg, /*noverify*/ true);
-                        envelope.timestamp = envelope.timestamp.toNumber();
                         await this.handleEnvelope(envelope);
                         deleting.push(this.signal.request({
                             call: 'messages',
