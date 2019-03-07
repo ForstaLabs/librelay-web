@@ -179,6 +179,7 @@
                     const data = await ns.crypto.decryptWebsocketMessage(request.body, this.signalingKey);
                     envelope = ns.protobuf.Envelope.decode(data);
                     envelope.timestamp = envelope.timestamp.toNumber();
+                    envelope.age = envelope.age && envelope.age.toNumber();
                 } catch(e) {
                     console.error("Error handling incoming message:", e);
                     request.respond(500, 'Bad encrypted websocket message');
@@ -328,10 +329,11 @@
                 sourceDevice: envelope.sourceDevice,
                 timestamp: sent.timestamp.toNumber(),
                 destination: sent.destination,
-                message: sent.message
+                message: sent.message,
+                age: envelope.age
             };
             if (sent.expirationStartTimestamp) {
-              ev.data.expirationStartTimestamp = sent.expirationStartTimestamp.toNumber();
+                ev.data.expirationStartTimestamp = sent.expirationStartTimestamp.toNumber();
             }
             await this.dispatchEvent(ev);
         }
@@ -347,7 +349,8 @@
                 source: envelope.source,
                 sourceDevice: envelope.sourceDevice,
                 message,
-                keyChange: envelope.keyChange
+                keyChange: envelope.keyChange,
+                age: envelope.age
             };
             await this.dispatchEvent(ev);
         }
