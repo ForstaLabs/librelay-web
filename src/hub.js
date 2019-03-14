@@ -553,15 +553,15 @@
         const missing = new Set(userIds);
         const users = {};
         if (!onlyDir) {
-            const resp = await ns.fetchAtlas('/v1/user/?id_in=' + userIds.join());
+            const resp = await ns.fetchAtlasPaged('/v1/user/?id_in=' + userIds.join());
             for (const user of resp.results) {
                 users[user.id] = user;
                 missing.delete(user.id);
             }
         }
         if (missing.size) {
-            const resp = await ns.fetchAtlas('/v1/directory/user/?id_in=' +
-                                             Array.from(missing).join());
+            const resp = await ns.fetchAtlasPaged('/v1/directory/user/?id_in=' +
+                                                  Array.from(missing).join());
             for (const user of resp.results) {
                 users[user.id] = user;
             }
