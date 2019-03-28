@@ -5,13 +5,21 @@
 
     const ns = self.relay = self.relay || {};
 
-    let _initialized;
-    ns.init = async function(store, protoPath, protoQuery) {
-        if (_initialized) {
+    let _initializedStore;
+    ns.setStore = function(store) {
+        if (_initializedStore) {
+            return;
+        }
+        ns.store = store;
+        _initializedStore = true;
+    };
+
+    let _initializedProtobufs;
+    ns.loadProtobufs = async function(protoPath, protoQuery) {
+        if (_initializedProtobufs) {
             return;
         }
         await ns.protobuf.load(protoPath, protoQuery);
-        ns.store = store;
-        _initialized = true;
+        _initializedProtobufs = true;
     };
 })();
