@@ -6,7 +6,7 @@
 
     const ns = self.relay = self.relay || {};
 
-    const secretsInfo = libsignal.util.stringToBytes("TextSecure Provisioning Message").buffer;
+    const secretsInfoMessage = "TextSecure Provisioning Message";
 
     ns.ProvisioningCipher = class ProvisioningCipher {
 
@@ -21,6 +21,7 @@
             const ivAndCiphertext = message.slice(0, message.byteLength - 32);
             const ciphertext = message.slice(16 + 1, message.byteLength - 32);
             const ecRes = libsignal.curve.calculateAgreement(masterEphemeral, this.keyPair.privKey);
+            const secretsInfo = libsignal.util.stringToBytes(secretsInfoMessage).buffer;
             const keys = await libsignal.crypto.deriveSecrets(ecRes, new ArrayBuffer(32), secretsInfo);
             await libsignal.crypto.verifyMAC(ivAndCiphertext, keys[1], mac, 32);
             const plaintext = await libsignal.crypto.decrypt(keys[0], ciphertext, iv);
@@ -38,6 +39,7 @@
             const ourKeyPair = libsignal.curve.generateKeyPair();
             const sharedSecret = libsignal.curve.calculateAgreement(libsignal.util.stringToArrayBuffer(theirPublicKey),
                                                                     ourKeyPair.privKey);
+            const secretsInfo = libsignal.util.stringToBytes(secretsInfoMessage).buffer;
             const keys = await libsignal.crypto.deriveSecrets(sharedSecret, new ArrayBuffer(32), secretsInfo);
             const ivLen = 16;
             const macLen = 32;
