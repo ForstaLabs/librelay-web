@@ -230,11 +230,6 @@
                 } else if (e instanceof libsignal.SessionError) {
                     const fqAddr = `${envelope.source}.${envelope.sourceDevice}`;
                     console.warn(`Session error for ${fqAddr}:`, e);
-                    /*if (e instanceof libsignal.PreKeyError) {
-                        console.warn("Refreshing prekeys...");
-                        const keys = await (new ns.AccountManager(this.signal)).generateKeys();
-                        await this.signal.registerKeys(keys);
-                    }*/
                     const ev = new ns.ClosingSessionEvent(e, envelope);
                     await this.dispatchEvent(ev);
                     if (!ev.isStopped()) {

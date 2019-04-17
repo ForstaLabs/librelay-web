@@ -29,17 +29,15 @@
 
         async registerAccount(name) {
             console.assert(typeof name === 'string');
-            const start = Date.now();
             const identity = libsignal.keyhelper.generateIdentityKeyPair();
-            const devInfo = await this._generateDeviceInfo(identity, name);
+            const devInfo = this._generateDeviceInfo(identity, name);
+            const generateKeys = this._generateKeys(1, 1, identity);
             const accountInfo = await this.signal.createAccount(devInfo);
-            await ns.store.putState('addr', accountInfo.addr);
-            await this.saveDeviceState(accountInfo.addr, accountInfo);
-            const keys = await this.generateKeys();
-            await this.signal.registerKeys(keys);
+            await Promise.all([
+                this.saveDeviceState(accountInfo.addr, accountInfo),
+                this.signal.registerKeys(await generateKeys)
+            ]);
             await this.registrationDone();
-            const done = Date.now();
-            console.error("TOOK", done - start);
         }
 
         async registerDevice(name, onProvisionReady, confirmAddress) {
@@ -77,13 +75,14 @@
                 const provisionMessage = await provisioningCipher.decrypt(await webSocketWaiter);
                 returnInterface.waiting = false;
                 await confirmAddress(provisionMessage.addr);
-                const devInfo = await this._generateDeviceInfo(provisionMessage.identityKeyPair,
-                                                               name);
-                await this.signal.addDevice(provisionMessage.provisioningCode,
-                                            provisionMessage.addr, devInfo);
-                await this.saveDeviceState(provisionMessage.addr, devInfo);
-                const keys = await this.generateKeys();
-                await this.signal.registerKeys(keys);
+                const devInfo = this._generateDeviceInfo(provisionMessage.identityKeyPair, name);
+                const generateKeys = this._generateKeys(1, 1, provisionMessage.identityKeyPair);
+                await Promise.all([
+                    this.signal.addDevice(provisionMessage.provisioningCode,
+                                          provisionMessage.addr, devInfo),
+                    this.saveDeviceState(provisionMessage.addr, devInfo),
+                    this.signal.registerKeys(await generateKeys)
+                ]);
                 await this.registrationDone();
             }).call(this);
 
@@ -166,6 +165,10 @@
                 ns.store.getState('signedKeyId', 1),
                 ns.store.getOurIdentity()
             ]);
+            return await this._generateKeys(startId, signedKeyId, ourIdent);
+        }
+
+        async _generateKeys(startId, signedKeyId, ourIdent) {
             const result = {
                 preKeys: [],
                 identityKey: ourIdent.pubKey
