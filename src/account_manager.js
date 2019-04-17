@@ -29,6 +29,7 @@
 
         async registerAccount(name) {
             console.assert(typeof name === 'string');
+            const start = Date.now();
             const identity = libsignal.keyhelper.generateIdentityKeyPair();
             const devInfo = await this._generateDeviceInfo(identity, name);
             const accountInfo = await this.signal.createAccount(devInfo);
@@ -37,9 +38,11 @@
             const keys = await this.generateKeys();
             await this.signal.registerKeys(keys);
             await this.registrationDone();
+            const done = Date.now();
+            console.error("TOOK", done - start);
         }
 
-        async registerDevice(name, onProvisionReady, confirmAddress, progressCallback) {
+        async registerDevice(name, onProvisionReady, confirmAddress) {
             console.assert(typeof name === 'string');
             const returnInterface = {waiting: true};
             const provisioningCipher = new ns.ProvisioningCipher();
@@ -79,7 +82,7 @@
                 await this.signal.addDevice(provisionMessage.provisioningCode,
                                             provisionMessage.addr, devInfo);
                 await this.saveDeviceState(provisionMessage.addr, devInfo);
-                const keys = await this.generateKeys(progressCallback);
+                const keys = await this.generateKeys();
                 await this.signal.registerKeys(keys);
                 await this.registrationDone();
             }).call(this);
@@ -157,47 +160,38 @@
             await Promise.all(stateKeys.map(key => ns.store.putState(key, info[key])));
         }
 
-        async generateKeys(progressCallback) {
-            if (typeof progressCallback !== 'function') {
-                progressCallback = undefined;
-            }
-            const count = this.preKeyHighWater;
-            const startId = await ns.store.getState('maxPreKeyId', 1);
-            if (typeof startId !== 'number') {
-                throw new TypeError('Invalid maxPreKeyId');
-            }
-            const signedKeyId = await ns.store.getState('signedKeyId', 1);
-            if (typeof signedKeyId !== 'number') {
-                throw new TypeError('Invalid signedKeyId');
-            }
-            const ourIdent = await ns.store.getOurIdentity();
+        async generateKeys() {
+            const [startId, signedKeyId, ourIdent] = await Promise.all([
+                ns.store.getState('maxPreKeyId', 1),
+                ns.store.getState('signedKeyId', 1),
+                ns.store.getOurIdentity()
+            ]);
             const result = {
                 preKeys: [],
                 identityKey: ourIdent.pubKey
             };
-            for (let keyId = startId; keyId < startId + count; ++keyId) {
+            const storeJobs = [];
+            for (let keyId = startId; keyId < startId + this.preKeyHighWater; ++keyId) {
                 const preKey = libsignal.keyhelper.generatePreKey(keyId);
-                await ns.store.storePreKey(preKey.keyId, preKey.keyPair);
                 result.preKeys.push({
                     keyId: preKey.keyId,
                     publicKey: preKey.keyPair.pubKey
                 });
-                if (progressCallback) {
-                    await progressCallback(keyId - startId, (keyId - startId) / count);
-                }
+                storeJobs.push(ns.store.storePreKey(preKey.keyId, preKey.keyPair));
             }
             const sprekey = libsignal.keyhelper.generateSignedPreKey(ourIdent, signedKeyId);
-            await ns.store.storeSignedPreKey(sprekey.keyId, sprekey.keyPair);
             result.signedPreKey = {
                 keyId: sprekey.keyId,
                 publicKey: sprekey.keyPair.pubKey,
                 signature: sprekey.signature
             };
-            await ns.store.removeSignedPreKey(signedKeyId - 2);
-            await ns.store.putStateDict({
-                maxPreKeyId: startId + count,
+            storeJobs.push(ns.store.storeSignedPreKey(sprekey.keyId, sprekey.keyPair));
+            storeJobs.push(ns.store.removeSignedPreKey(signedKeyId - 2));
+            storeJobs.push(ns.store.putStateDict({
+                maxPreKeyId: startId + this.preKeyHighWater,
                 signedKeyId: signedKeyId + 1
-            });
+            }));
+            await Promise.all(storeJobs);
             return result;
         }
 
