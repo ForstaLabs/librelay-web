@@ -153,6 +153,7 @@
         },
 
         addDevice: async function(code, addr, info) {
+            // XXX This should not edit info inplace.
             if (!info.password || !addr || !info.signalingKey) {
                 throw new ReferenceError("Missing Key(s)");
             }

@@ -77,9 +77,10 @@
                 await confirmAddress(provisionMessage.addr);
                 const devInfo = this._generateDeviceInfo(provisionMessage.identityKeyPair, name);
                 const generateKeys = this._generateKeys(1, 1, provisionMessage.identityKeyPair);
+                // NOTE: addDevice mutates devInfo in-place. :(
+                await this.signal.addDevice(provisionMessage.provisioningCode,
+                                            provisionMessage.addr, devInfo),
                 await Promise.all([
-                    this.signal.addDevice(provisionMessage.provisioningCode,
-                                          provisionMessage.addr, devInfo),
                     this.saveDeviceState(provisionMessage.addr, devInfo),
                     this.signal.registerKeys(await generateKeys)
                 ]);
