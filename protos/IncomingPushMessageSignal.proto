@@ -18,6 +18,7 @@ message Envelope {
   optional bytes  legacyMessage = 6; // Contains an encrypted DataMessage
   optional bytes  content       = 8; // Contains an encrypted Content
   optional uint64 age           = 9;
+  optional uint64 received      = 10;
 }
 
 message Content {
