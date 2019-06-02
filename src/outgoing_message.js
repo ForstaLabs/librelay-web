@@ -70,9 +70,10 @@
             await this._emit('error', entry);
         }
 
-        async _emitSent(addr) {
+        async _emitSent(addr, serverTimestamp) {
             await this._emitSentEntry({
                 timestamp: Date.now(),
+                serverTimestamp,
                 addr
             });
         }
@@ -198,8 +199,9 @@
                     }
                 }
             } while(!messages && !attempts++);
+            let resp;
             try {
-                await this.transmitMessage(addr, messages, this.timestamp);
+                resp = await this.transmitMessage(addr, messages, this.timestamp);
             } catch(e) {
                 if (e instanceof ns.ProtocolError && (e.code === 410 || e.code === 409)) {
                     if (!recurse) {
@@ -215,7 +217,7 @@
                     // Optimize first-contact key lookup (just get them all at once).
                     const updateDevices = messages.length ? resetDevices : undefined;
                     await this.getKeysForAddr(addr, updateDevices);
-                    await this._sendToAddr(addr, /*recurse*/ (e.code === 409));
+                    return await this._sendToAddr(addr, /*recurse*/ (e.code === 409));
                 } else if (e.code === 401 || e.code === 403) {
                     throw e;
                 } else {
@@ -223,7 +225,7 @@
                     return;
                 }
             }
-            this._emitSent(addr);
+            this._emitSent(addr, resp.received);
         }
 
         async _sendToDevice(addr, deviceId, recurse) {
@@ -247,12 +249,13 @@
                 }
             } while(!encryptedMessage && !attempts++);
             const messageBundle = this.toJSON(protoAddr, encryptedMessage, this.timestamp);
+            let resp;
             try {
-                await this.signal.sendMessage(addr, deviceId, messageBundle);
+                resp = await this.signal.sendMessage(addr, deviceId, messageBundle);
             } catch(e) {
                 if (e instanceof ns.ProtocolError && e.code === 410) {
                     sessionCipher.closeOpenSession();  // Force getKeysForAddr on next call.
-                    await this._sendToDevice(addr, deviceId, /*recurse*/ false);
+                    return await this._sendToDevice(addr, deviceId, /*recurse*/ false);
                 } else if (e.code === 401 || e.code === 403) {
                     throw e;
                 } else {
@@ -260,7 +263,8 @@
                     return;
                 }
             }
-            this._emitSent(addr);
+            this._emitSent(addr, resp.received);
+            return resp;
         }
 
         toJSON(address, encryptedMsg, timestamp) {
@@ -319,9 +323,9 @@
             const deviceId = addrTuple[1];
             try {
                 if (deviceId) {
-                    await this._sendToDevice(addr, deviceId, /*recurse*/ true);
+                    return await this._sendToDevice(addr, deviceId, /*recurse*/ true);
                 } else {
-                    await this._sendToAddr(addr, /*recurse*/ true);
+                    return await this._sendToAddr(addr, /*recurse*/ true);
                 }
             } catch(e) {
                 this._emitError(encodedAddr, "Failed to send to address " + encodedAddr, e);
