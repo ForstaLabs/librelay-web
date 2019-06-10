@@ -40,7 +40,8 @@
         devices: "v1/devices",
         keys: "v2/keys",
         messages: "v1/messages",
-        attachment: "v1/attachments"
+        attachment: "v1/attachments",
+        timestamp: "v1/timestamp"
     };
 
     const SIGNAL_HTTP_MESSAGES = {
@@ -355,6 +356,10 @@
                     webSocketChannel: true
                 }
             });
+        },
+
+        getTimestamp: async function() {
+            return await this.request({call: 'timestamp'});
         }
     };
 
